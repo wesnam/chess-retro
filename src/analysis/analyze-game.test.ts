@@ -243,6 +243,61 @@ describe("best-move detection", () => {
   });
 });
 
+describe("a PGN the parser cannot fully read", () => {
+  it("refuses rather than analysing part of a game", async () => {
+    // Analysing a fragment would report an accuracy for a game that never
+    // happened, recorded as if the whole thing had been reviewed. chess.js
+    // rejects an illegal move outright; the ply-count guard in analyseGame
+    // catches the other shape of the problem, a parse that stops early.
+    const illegal = pgn("1. e4 e5 2. Nf3 Nc6 3. Bxf7 Bc5 *");
+
+    await expect(
+      analyseGame(illegal, "w", stubEngine([{ score: cp(0) }])),
+    ).rejects.toThrow();
+  });
+
+  it("counts the plies a valid PGN should yield", async () => {
+    // The guard must agree with the parser on a normal game, or every
+    // analysis would be rejected.
+    const result = await analyseGame(
+      pgn("1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *"),
+      "w",
+      stubEngine([{ score: cp(0) }]),
+    );
+    expect(result.moves).toHaveLength(6);
+  });
+
+  it("accepts a PGN with comments, annotations and variations", async () => {
+    // These are not moves, and must not be counted as missing ones.
+    const annotated = pgn(
+      "1. e4 {good} e5 $1 2. Nf3 (2. Bc4 Nf6) 2... Nc6 ; trailing\n*",
+    );
+
+    const result = await analyseGame(
+      annotated,
+      "w",
+      stubEngine([{ score: cp(0) }]),
+    );
+    expect(result.moves).toHaveLength(4);
+  });
+});
+
+describe("forced moves", () => {
+  it("counts a move as best when it was the only legal one", async () => {
+    // White is in check from the queen and can only take it. Scoring that as
+    // an error would blame a player for a position they had no say in.
+    const onlyMove = `[Event "Test"]\n[FEN "7k/8/8/8/8/8/6q1/7K w - - 0 1"]\n[SetUp "1"]\n\n1. Kxg2 *`;
+
+    const result = await analyseGame(
+      onlyMove,
+      "w",
+      stubEngine([{ score: cp(-500), bestMove: undefined }, { score: cp(500) }]),
+    );
+
+    expect(result.moves[0]!.classification).toBe("best");
+  });
+});
+
 describe("game accuracy", () => {
   it("is reported for both players", async () => {
     const result = await analyseGame(

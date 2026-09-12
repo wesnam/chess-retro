@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { getUsername } from "@/settings/settings";
-import { analyseAndStore, findGame } from "@/analysis/store";
+import { AlreadyRunningError, analyseAndStore, findGame } from "@/analysis/store";
 import { disposeEngine, getEngine } from "@/engine/singleton";
 import { EngineError } from "@/engine/uci-engine";
 
@@ -43,6 +43,13 @@ export async function POST(
       depth: analysis.depth,
     });
   } catch (error) {
+    if (error instanceof AlreadyRunningError) {
+      return NextResponse.json(
+        { status: "running", error: "This game is already being analysed." },
+        { status: 409 },
+      );
+    }
+
     if (error instanceof EngineError) {
       // The engine is in an unknown state; drop it so the next request gets a
       // fresh process rather than inheriting a broken one.

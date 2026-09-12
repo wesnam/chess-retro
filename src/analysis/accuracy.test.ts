@@ -3,6 +3,7 @@ import {
   classify,
   gameAccuracy,
   invert,
+  MATE_CP,
   moveAccuracy,
   THRESHOLDS,
   toCp,
@@ -85,6 +86,26 @@ describe("scores as numbers", () => {
     // And for the losing side, a nearer mate is worse.
     expect(toCp(mate(-1))).toBeLessThan(toCp(mate(-8)));
   });
+
+  it("treats mate 0 as already lost, not already won", () => {
+    // Stockfish emits `score mate 0` for a position where the side to move is
+    // ALREADY checkmated — verified directly against the engine. Reading it
+    // as a win inverts the cost of every checkmating move.
+    expect(toCp(mate(0))).toBe(-MATE_CP);
+    expect(winPct(mate(0))).toBe(0);
+  });
+
+  it("makes delivering mate cost the loser, not the winner", () => {
+    // White mates: before the move White had mate in 1; after it, the side to
+    // move (Black) is mated, which in Black's own terms is mate 0.
+    const moverBefore = mate(1);
+    const opponentAfter = mate(0);
+    const moverAfter = invert(opponentAfter);
+
+    // The mover ends up winning, so the move costs them nothing.
+    expect(winPct(moverAfter)).toBe(100);
+    expect(toCp(moverBefore) - toCp(moverAfter)).toBeLessThanOrEqual(0);
+  });
 });
 
 describe("move accuracy", () => {
@@ -164,22 +185,31 @@ describe("classification", () => {
 });
 
 describe("game accuracy", () => {
+  /** Moves of one colour, at the positions that colour actually played from. */
+  const movesOf = (accuracies: number[], firstPly = 0) =>
+    accuracies.map((accuracy, i) => ({
+      accuracy,
+      positionIndex: firstPly + i * 2,
+    }));
+
   it("is unknown for a game with no moves", () => {
     expect(gameAccuracy([], [])).toBeUndefined();
   });
 
   it("is near perfect for a flawless game", () => {
-    const perfect = new Array(30).fill(100);
-    expect(gameAccuracy(perfect, new Array(31).fill(50))).toBeCloseTo(100, 0);
+    expect(
+      gameAccuracy(movesOf(new Array(30).fill(100)), new Array(61).fill(50)),
+    ).toBeCloseTo(100, 0);
   });
 
   it("is low for a game of constant errors", () => {
-    const awful = new Array(30).fill(10);
-    expect(gameAccuracy(awful, new Array(31).fill(50))).toBeLessThan(30);
+    expect(
+      gameAccuracy(movesOf(new Array(30).fill(10)), new Array(61).fill(50)),
+    ).toBeLessThan(30);
   });
 
   it("stays within 0-100", () => {
-    const value = gameAccuracy([0, 100, 50], [50, 50, 50, 50]);
+    const value = gameAccuracy(movesOf([0, 100, 50]), new Array(7).fill(50));
     expect(value!).toBeGreaterThanOrEqual(0);
     expect(value!).toBeLessThanOrEqual(100);
   });
@@ -187,10 +217,10 @@ describe("game accuracy", () => {
   it("is dragged down by one catastrophe among good moves", () => {
     // The harmonic mean is what stops a single disaster hiding behind a run of
     // easy accurate moves.
-    const wins = new Array(21).fill(50);
-    const clean = gameAccuracy(new Array(20).fill(95), wins)!;
+    const wins = new Array(41).fill(50);
+    const clean = gameAccuracy(movesOf(new Array(20).fill(95)), wins)!;
     const withBlunder = gameAccuracy(
-      [...new Array(19).fill(95), 2],
+      movesOf([...new Array(19).fill(95), 2]),
       wins,
     )!;
     expect(withBlunder).toBeLessThan(clean - 5);
@@ -198,13 +228,40 @@ describe("game accuracy", () => {
 
   it("weights errors in sharp positions above errors in quiet ones", () => {
     // Same move accuracies; different volatility around them.
-    const accuracies = [95, 95, 40, 95, 95, 95, 95, 95, 95, 95];
-    const quiet = new Array(11).fill(50);
-    const swinging = [50, 52, 20, 80, 30, 70, 45, 55, 50, 50, 50];
+    const moves = movesOf([95, 95, 40, 95, 95, 95, 95, 95, 95, 95]);
+    const quiet = new Array(21).fill(50);
+    const swinging = [
+      50, 51, 52, 48, 20, 80, 30, 70, 45, 55, 50, 50, 50, 50, 50, 50, 50, 50,
+      50, 50, 50,
+    ];
 
-    const inQuiet = gameAccuracy(accuracies, quiet)!;
-    const inSharp = gameAccuracy(accuracies, swinging)!;
+    const inQuiet = gameAccuracy(moves, quiet)!;
+    const inSharp = gameAccuracy(moves, swinging)!;
     expect(inSharp).not.toBeCloseTo(inQuiet, 3);
+  });
+
+  it("weights each colour by the volatility around its own moves", () => {
+    // The bug this pins: mapping a colour-filtered list proportionally onto
+    // the full position sequence weights Black's moves by White's volatility.
+    // Here the game is calm early and wild late, and one poor move sits at
+    // each end — so which end is weighted heavily decides the figure.
+    const winPercents = [
+      50, 50, 50, 50, 50, 50, 50, 50, 20, 80, 15, 85, 10, 90, 50, 50, 50, 50,
+      50, 50, 50,
+    ];
+    const accuracies = [40, 95, 95, 95, 95, 95, 95, 95, 95, 40];
+
+    // The same ten accuracies, read at the calm end versus the wild end.
+    const early = gameAccuracy(
+      accuracies.map((accuracy, i) => ({ accuracy, positionIndex: i })),
+      winPercents,
+    )!;
+    const late = gameAccuracy(
+      accuracies.map((accuracy, i) => ({ accuracy, positionIndex: i + 10 })),
+      winPercents,
+    )!;
+
+    expect(early).not.toBeCloseTo(late, 3);
   });
 });
 

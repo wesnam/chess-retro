@@ -26,6 +26,12 @@ export type EngineOptions = {
   hashMb?: number;
   /** How long to wait for a single position before giving up, ms. */
   timeoutMs?: number;
+  /**
+   * Ceiling on a single position's search, ms. The engine returns its best
+   * answer so far rather than running to full depth, so one sharp middlegame
+   * cannot stall a whole game's analysis.
+   */
+  moveTimeMs?: number;
 };
 
 export type PositionAnalysis = {
@@ -44,6 +50,10 @@ export class UciEngine {
   private process: ChildProcessWithoutNullStreams | undefined;
   private reader: readline.Interface | undefined;
   private listeners = new Set<(line: string) => void>();
+  /** Serialises analyse() calls; see the note there. */
+  private queue: Promise<void> = Promise.resolve();
+  /** Waiters to reject if the process dies underneath them. */
+  private pending = new Set<(error: EngineError) => void>();
   private readonly options: Required<EngineOptions>;
 
   constructor(options: EngineOptions = {}) {
@@ -52,7 +62,11 @@ export class UciEngine {
       depth: options.depth ?? DEFAULT_DEPTH,
       threads: options.threads ?? 1,
       hashMb: options.hashMb ?? 128,
-      timeoutMs: options.timeoutMs ?? 30_000,
+      // Generous: a sharp middlegame at depth 18 can take far longer than a
+      // quiet one, and a timeout here costs the whole game's analysis. This
+      // is a guard against a hung engine, not a search budget.
+      timeoutMs: options.timeoutMs ?? 120_000,
+      moveTimeMs: options.moveTimeMs ?? 5_000,
     };
   }
 
@@ -63,15 +77,19 @@ export class UciEngine {
   async start(): Promise<void> {
     if (this.process) return;
 
-    try {
-      this.process = spawn(this.options.path, [], { stdio: "pipe" });
-    } catch (cause) {
-      throw new EngineError(`Could not start ${this.options.path}: ${cause}`);
-    }
+    this.process = spawn(this.options.path, [], { stdio: "pipe" });
 
-    this.process.on("error", () => {
-      // Surfaced to callers as a timeout on the pending command; the process
-      // is replaced rather than taking the whole job down with it.
+    // spawn reports a missing binary asynchronously, so this cannot be a
+    // try/catch: without it a missing Stockfish would stall for the whole
+    // timeout before anyone learned why.
+    let spawnError: EngineError | undefined;
+    this.process.on("error", (cause: NodeJS.ErrnoException) => {
+      spawnError =
+        cause.code === "ENOENT"
+          ? new EngineError(
+              `Could not find the engine at "${this.options.path}". Install it with: brew install stockfish`,
+            )
+          : new EngineError(`Engine failed: ${cause.message}`);
       this.dispose();
     });
 
@@ -80,7 +98,13 @@ export class UciEngine {
       for (const listener of [...this.listeners]) listener(line);
     });
 
-    await this.handshake();
+    try {
+      await this.handshake();
+    } catch (cause) {
+      // A spawn failure surfaces here as the handshake never completing;
+      // report the real reason rather than "did not respond".
+      throw spawnError ?? cause;
+    }
   }
 
   private async handshake(): Promise<void> {
@@ -108,7 +132,27 @@ export class UciEngine {
     await this.waitFor((line) => line === "readyok");
   }
 
-  async analyse(fen: string): Promise<PositionAnalysis> {
+  /**
+   * Analyse one position.
+   *
+   * Calls are serialised: one engine speaks one conversation at a time, and
+   * two overlapping searches on one stdin would interleave their `position`
+   * and `go` commands and return each other's evaluations.
+   */
+  analyse(fen: string): Promise<PositionAnalysis> {
+    const run = this.queue.then(
+      () => this.analyseNow(fen),
+      () => this.analyseNow(fen),
+    );
+    // Keep the chain alive regardless of this call's outcome.
+    this.queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private async analyseNow(fen: string): Promise<PositionAnalysis> {
     if (!this.process) throw new EngineError("Engine is not running");
 
     let score: Score | undefined;
@@ -126,8 +170,21 @@ export class UciEngine {
     this.listeners.add(collect);
     try {
       this.send(`position fen ${fen}`);
-      this.send(`go depth ${this.options.depth}`);
-      const best = await this.waitFor((line) => line.startsWith("bestmove"));
+      // Whichever comes first: the target depth, or the per-position ceiling.
+      this.send(
+        `go depth ${this.options.depth} movetime ${this.options.moveTimeMs}`,
+      );
+
+      let best: string;
+      try {
+        best = await this.waitFor((line) => line.startsWith("bestmove"));
+      } catch (cause) {
+        // The search is still running. Stop it and wait for its bestmove to
+        // drain, or the next analyse() would resolve on this position's
+        // result and store one position's evaluation under another's.
+        await this.abortSearch();
+        throw cause;
+      }
 
       if (!score) {
         throw new EngineError(`Engine returned no evaluation for: ${fen}`);
@@ -144,6 +201,26 @@ export class UciEngine {
     }
   }
 
+  /**
+   * Stop a search that outran its timeout and drain the `bestmove` it still
+   * owes us, so the reply cannot be mistaken for the next position's.
+   */
+  private async abortSearch(): Promise<void> {
+    if (!this.process?.stdin.writable) return;
+
+    try {
+      this.send("stop");
+      await this.waitForWithTimeout(
+        (line) => line.startsWith("bestmove"),
+        2_000,
+      );
+    } catch {
+      // The engine is unresponsive rather than merely slow. Replace it: a
+      // process in an unknown state cannot be trusted for the next position.
+      this.dispose();
+    }
+  }
+
   private send(command: string): void {
     if (!this.process?.stdin.writable) {
       throw new EngineError("Engine is not accepting commands");
@@ -152,11 +229,18 @@ export class UciEngine {
   }
 
   private waitFor(predicate: (line: string) => boolean): Promise<string> {
+    return this.waitForWithTimeout(predicate, this.options.timeoutMs);
+  }
+
+  private waitForWithTimeout(
+    predicate: (line: string) => boolean,
+    timeoutMs: number,
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         cleanup();
-        reject(new EngineError(`Engine did not respond within ${this.options.timeoutMs}ms`));
-      }, this.options.timeoutMs);
+        reject(new EngineError(`Engine did not respond within ${timeoutMs}ms`));
+      }, timeoutMs);
 
       const listener = (line: string) => {
         if (!predicate(line)) return;
@@ -167,8 +251,17 @@ export class UciEngine {
       const cleanup = () => {
         clearTimeout(timer);
         this.listeners.delete(listener);
+        this.pending.delete(fail);
       };
 
+      // Called if the process dies while this is waiting, so a crash surfaces
+      // immediately instead of after a full timeout of dead waiting.
+      const fail = (error: EngineError) => {
+        cleanup();
+        reject(error);
+      };
+
+      this.pending.add(fail);
       this.listeners.add(listener);
     });
   }
@@ -178,6 +271,12 @@ export class UciEngine {
     const child = this.process;
     this.process = undefined;
 
+    // Fail anything still waiting, rather than leaving it to time out against
+    // a process that is already gone.
+    for (const fail of [...this.pending]) {
+      fail(new EngineError("Engine stopped while waiting for a reply"));
+    }
+    this.pending.clear();
     this.listeners.clear();
     this.reader?.close();
     this.reader = undefined;

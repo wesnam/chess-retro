@@ -18,9 +18,9 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | # | Slice | State |
 |---|-------|-------|
 | 01 | Scaffold, database, settings | ✅ done |
-| 02 | Sync chess.com games into a browsable list | next |
+| 02 | Sync chess.com games into a browsable list | ✅ done |
 | 03 | Label games with opening names | |
-| 04 | Analyse one game and show its moves | |
+| 04 | Analyse one game and show its moves | ✅ done |
 | 05 | Interactive board for a reviewed game | |
 | 06 | Batch-analyse the whole corpus, resumably | |
 | 07 | Tag moves with tactical motifs | |
@@ -33,10 +33,11 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 ## Requirements
 
 - **Node.js 22 or newer** (developed on 25)
-- **Stockfish** — needed from slice 04 onward, not yet required:
+- **Stockfish** — required to analyse games:
   ```sh
   brew install stockfish
   ```
+  Set `STOCKFISH_PATH` if it is not on your `PATH`.
 
 ## Getting started
 
@@ -58,6 +59,7 @@ file — back it up by copying it, reset by deleting it.
 | `npm run build` | Production build |
 | `npm start` | Production server (run this rather than deploying serverless — the engine pool lives in module scope) |
 | `npm test` | Test suite |
+| `npm run test:slow` | Tests that spawn a real Stockfish — run these whenever the engine layer changes |
 | `npm run typecheck` | TypeScript, no emit |
 
 ## Configuration
@@ -65,6 +67,7 @@ file — back it up by copying it, reset by deleting it.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CHESS_RETRO_DB` | `data/chess-retro.db` | Database location |
+| `STOCKFISH_PATH` | `stockfish` | Engine binary |
 
 ## How it works
 
@@ -105,8 +108,18 @@ different problems with different remedies. Averaging them describes a player wh
   motif rows. The first keeps two chess.com accounts from blending into one set of conclusions; the
   second avoids a join across tens of thousands of rows on every dashboard load.
 - **Engine scores are normalised to the mover's perspective at write time.** UCI reports from the
-  side-to-move's perspective. This is the single easiest thing to get wrong, and it silently inverts
-  every number downstream.
+  side-to-move's perspective, and that flips every ply, so `eval_after` is negated. This is the
+  single easiest thing to get wrong, and it silently inverts every number downstream. Verified
+  against the engine directly: one position reads `+720` with Black to move and `-761` with White.
+- **`score mate 0` means the side to move is already checkmated** — the worst possible score, not
+  the best. Reading it as a win inverts the cost of every checkmating move.
+- **Classification keys on win-probability drop, never centipawns.** A 46cp drop in a `+612`
+  position is "excellent"; a 300cp drop across the balance point is a blunder.
+- **A game of P plies costs P+1 evaluations, not 2P.** Each position is evaluated once and a move's
+  cost is the difference between consecutive evaluations.
+- **The accuracy figures are checked against chess.com's**, which is the strongest validation
+  available: across four real games ours differ by 1.9 points on average. A sudden divergence means
+  a sign or perspective bug.
 - **Tests are colocated** as `*.test.ts`. Files named `*.slow.test.ts` spawn a real Stockfish binary
   and are excluded from the default run.
 - Vitest 5 prints an engine warning on odd-numbered Node releases such as 25. It runs correctly.

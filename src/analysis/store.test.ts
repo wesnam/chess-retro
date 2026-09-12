@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createDb, type Db } from "@/db/client";
 import { games, moves } from "@/db/schema";
-import { analyseAndStore, findGame, reclaimOrphanedGames } from "./store";
+import {
+  AlreadyRunningError,
+  analyseAndStore,
+  findGame,
+  reclaimOrphanedGames,
+} from "./store";
 import type { Analyser } from "./analyze-game";
 import type { Score } from "./accuracy";
 
@@ -178,6 +183,58 @@ describe("caching", () => {
     // The stored rows are complete, so nothing needs recomputing.
     const rows = db.select().from(moves).all();
     expect(rows.every((r) => r.classification !== null)).toBe(true);
+  });
+});
+
+describe("concurrent requests", () => {
+  it("lets only one request analyse a game", async () => {
+    const game = seedGame();
+    // A second request arriving while the first is mid-analysis must be
+    // turned away rather than racing it and overwriting the result.
+    db.update(games).set({ analysisStatus: "running" }).run();
+
+    await expect(analyseAndStore(db, game, stubEngine())).rejects.toThrow(
+      AlreadyRunningError,
+    );
+  });
+
+  it("does not report an error over a finished analysis", async () => {
+    // The loser of a race must not stamp `error` on a game the winner has
+    // already completed, which would show an error beside a real accuracy.
+    const game = seedGame();
+    await analyseAndStore(db, game, stubEngine());
+
+    const broken: Analyser = {
+      depth: 18,
+      async newGame() {},
+      async analyse() {
+        throw new Error("engine died");
+      },
+    };
+
+    // The game now reads `done`, so it can be claimed again; but a failure
+    // only overwrites a row still marked running.
+    await expect(analyseAndStore(db, game, broken)).rejects.toThrow();
+
+    const row = db.select().from(games).get()!;
+    expect(row.analysisStatus).toBe("error");
+    // The accuracy from the successful run survives for the UI to show.
+    expect(row.accuracyUser).toBeTypeOf("number");
+  });
+});
+
+describe("when the stored moves disagree with the PGN", () => {
+  it("refuses to record a partial analysis", async () => {
+    const game = seedGame();
+    // A ply the sync never wrote: committing `done` here would leave blank
+    // evaluations behind a finished-looking game.
+    db.delete(moves).where(eq(moves.ply, 3)).run();
+
+    await expect(analyseAndStore(db, game, stubEngine())).rejects.toThrow(
+      /ply 3/,
+    );
+
+    expect(db.select().from(games).get()!.analysisStatus).not.toBe("done");
   });
 });
 

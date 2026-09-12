@@ -114,6 +114,54 @@ describe("a real engine", () => {
     await expect(uci.analyse("not-a-fen")).rejects.toThrow(EngineError);
   }, 20_000);
 
+  it("serialises overlapping requests instead of crossing them", async () => {
+    // Two searches on one stdin would interleave their position/go commands
+    // and return each other's evaluations.
+    const uci = await startEngine(10);
+
+    const [mateResult, rookUp] = await Promise.all([
+      uci.analyse("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1"),
+      uci.analyse("r5k1/5ppp/8/8/8/8/8/6K1 b - - 0 1"),
+    ]);
+
+    // Each answer belongs to the position that asked for it.
+    expect(mateResult.score.kind).toBe("mate");
+    expect(rookUp.score.kind).toBe("cp");
+    expect(winPct(rookUp.score)).toBeGreaterThan(85);
+  }, 40_000);
+
+  it("keeps working after a position times out", async () => {
+    // A timed-out search is still running. Without stopping it and draining
+    // its bestmove, the next call resolves on the stale reply and stores one
+    // position's evaluation under another's.
+    // movetime raised well past the timeout, so the search is genuinely still
+    // running when we give up on it.
+    const uci = new UciEngine({ depth: 40, timeoutMs: 400, moveTimeMs: 60_000 });
+    engine = uci;
+    await uci.start();
+
+    await expect(
+      uci.analyse("r3k2r/pppq1ppp/2np1n2/2b1p1B1/2B1P1b1/2NP1N2/PPPQ1PPP/R3K2R w KQkq - 0 1"),
+    ).rejects.toThrow(EngineError);
+
+    // The engine must still answer correctly, with this position's own score.
+    const next = await uci.analyse("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1");
+    expect(next.score.kind).toBe("mate");
+    expect(next.bestMove).toBe("a1a8");
+  }, 40_000);
+
+  it("says so plainly when the engine is not installed", async () => {
+    // Rather than stalling for the whole timeout with no explanation.
+    const missing = new UciEngine({
+      path: "/nonexistent/stockfish",
+      timeoutMs: 20_000,
+    });
+
+    const started = Date.now();
+    await expect(missing.start()).rejects.toThrow(/brew install stockfish/);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  }, 30_000);
+
   it("refuses to analyse once disposed", async () => {
     const uci = await startEngine(8);
     uci.dispose();

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { games, moves } from "@/db/schema";
 import { analyseGame, type Analyser, type GameAnalysis } from "./analyze-game";
@@ -19,12 +19,18 @@ export type StoredGame = {
  * therefore leaves a game marked `running`, which startup can reclaim rather
  * than leaving half-analysed rows behind.
  */
+export class AlreadyRunningError extends Error {}
+
 export async function analyseAndStore(
   db: Db,
   game: StoredGame,
   engine: Analyser,
 ): Promise<GameAnalysis> {
-  markRunning(db, game);
+  if (!claimGame(db, game)) {
+    throw new AlreadyRunningError(
+      `Game ${game.id} is already being analysed.`,
+    );
+  }
 
   let analysis: GameAnalysis;
   try {
@@ -34,19 +40,29 @@ export async function analyseAndStore(
       engine,
     );
   } catch (error) {
+    // Only our own claim may be marked failed: by now another request could
+    // have finished this game, and clobbering that would show an error
+    // beside a populated accuracy panel.
     db.update(games)
       .set({
         analysisStatus: "error",
         analysisError: error instanceof Error ? error.message : String(error),
       })
-      .where(and(eq(games.id, game.id), eq(games.user, game.user)))
+      .where(
+        and(
+          eq(games.id, game.id),
+          eq(games.user, game.user),
+          eq(games.analysisStatus, "running"),
+        ),
+      )
       .run();
     throw error;
   }
 
   db.transaction((tx) => {
     for (const move of analysis.moves) {
-      tx.update(moves)
+      const result = tx
+        .update(moves)
         .set({
           evalBefore: move.evalBefore,
           evalAfter: move.evalAfter,
@@ -67,6 +83,15 @@ export async function analyseAndStore(
           ),
         )
         .run();
+
+      // A ply the stored rows do not have means the PGN we analysed and the
+      // rows sync wrote disagree. Committing `done` here would leave blank
+      // evaluations behind a finished-looking game.
+      if (result.changes === 0) {
+        throw new Error(
+          `No stored move at ply ${move.ply} for game ${game.id}; refusing to record a partial analysis.`,
+        );
+      }
     }
 
     tx.update(games)
@@ -84,11 +109,25 @@ export async function analyseAndStore(
   return analysis;
 }
 
-function markRunning(db: Db, game: StoredGame): void {
-  db.update(games)
+/**
+ * Take ownership of a game for analysis, as a compare-and-set: the row only
+ * moves to `running` if it is not already running. Returns false when another
+ * request got there first, so two concurrent callers cannot both analyse the
+ * same game and have the loser overwrite the winner.
+ */
+function claimGame(db: Db, game: StoredGame): boolean {
+  const result = db
+    .update(games)
     .set({ analysisStatus: "running", analysisError: null })
-    .where(and(eq(games.id, game.id), eq(games.user, game.user)))
+    .where(
+      and(
+        eq(games.id, game.id),
+        eq(games.user, game.user),
+        ne(games.analysisStatus, "running"),
+      ),
+    )
     .run();
+  return result.changes > 0;
 }
 
 /**

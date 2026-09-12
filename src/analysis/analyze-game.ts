@@ -57,6 +57,16 @@ export async function analyseGame(
   chess.loadPgn(pgn);
   const history = chess.history({ verbose: true });
 
+  // chess.js stops at the first move it cannot read rather than throwing, so a
+  // truncated PGN would otherwise yield a short analysis and a wrong accuracy,
+  // recorded as if the whole game had been reviewed.
+  const expectedPlies = countMovetextPlies(pgn);
+  if (expectedPlies !== undefined && history.length < expectedPlies) {
+    throw new Error(
+      `PGN parsed to ${history.length} plies but its movetext has ${expectedPlies}; refusing to analyse a partial game.`,
+    );
+  }
+
   if (history.length === 0) {
     return {
       moves: [],
@@ -111,7 +121,11 @@ export async function analyseGame(
       classification: classify({
         winPctBefore: pctBefore,
         winPctAfter: pctAfter,
-        isBestMove: playedTheBestMove(move, before.bestMove),
+        isBestMove: playedTheBestMove(
+          move,
+          before.bestMove,
+          legalMoveCount(move.before),
+        ),
       }),
     });
 
@@ -121,7 +135,10 @@ export async function analyseGame(
 
   const accuracyFor = (color: "w" | "b") =>
     gameAccuracy(
-      moves.filter((m) => m.color === color).map((m) => m.moveAccuracy),
+      moves
+        .filter((m) => m.color === color)
+        // ply is 1-based; the position it was played from is ply - 1.
+        .map((m) => ({ accuracy: m.moveAccuracy, positionIndex: m.ply - 1 })),
       whiteWinPercents,
     );
 
@@ -133,10 +150,57 @@ export async function analyseGame(
   };
 }
 
+/** How many legal moves the side to move had in this position. */
+function legalMoveCount(fen: string): number {
+  try {
+    return new Chess(fen).moves().length;
+  } catch {
+    // An unreadable FEN should not decide whether a move counts as best.
+    return 0;
+  }
+}
+
+/**
+ * Count the plies in a PGN's movetext, for comparison against what the parser
+ * accepted. Deliberately rough: it only needs to catch a parse that stopped
+ * early, not to be a second PGN reader.
+ */
+function countMovetextPlies(pgn: string): number | undefined {
+  // Everything after the header block is movetext.
+  const body = pgn.replace(/^\s*(\[[^\]]*\]\s*)*/, "");
+  if (body.trim() === "") return undefined;
+
+  const withoutComments = body
+    .replace(/\{[^}]*\}/g, " ")
+    .replace(/;[^\n]*/g, " ")
+    .replace(/\$\d+/g, " ")
+    // Recursive annotation variations are alternatives, not moves played.
+    .replace(/\([^()]*\)/g, " ");
+
+  const tokens = withoutComments
+    .split(/\s+/)
+    .filter(
+      (token) =>
+        token !== "" &&
+        // Move numbers, results and ellipses are not moves.
+        !/^\d+\.*$/.test(token) &&
+        !/^(1-0|0-1|1\/2-1\/2|\*)$/.test(token) &&
+        token !== "...",
+    )
+    .map((token) => token.replace(/^\d+\.+/, ""))
+    .filter((token) => token !== "");
+
+  return tokens.length;
+}
+
 function playedTheBestMove(
   move: { from: string; to: string; promotion?: string },
   bestMoveUci: string | undefined,
+  legalMoveCount: number,
 ): boolean {
+  // With one legal move there was nothing to get wrong. Without this a forced
+  // recapture scores as an error whenever the engine reports no best move.
+  if (legalMoveCount === 1) return true;
   if (!bestMoveUci) return false;
   return `${move.from}${move.to}${move.promotion ?? ""}` === bestMoveUci;
 }

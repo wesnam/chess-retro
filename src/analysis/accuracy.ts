@@ -27,9 +27,14 @@ const WIN_PCT_CLAMP = 1000;
 
 /** Flip a score to the opposite player's perspective. */
 export function invert(score: Score): Score {
-  return score.kind === "cp"
-    ? { kind: "cp", cp: -score.cp }
-    : { kind: "mate", moves: -score.moves };
+  if (score.kind === "cp") return { kind: "cp", cp: -score.cp };
+
+  // `mate 0` is "the side to move is checkmated". Negating zero would leave
+  // it unchanged, making the position lost for both players; from the other
+  // side it is a delivered mate, which `mate 1` is the nearest expression of.
+  if (score.moves === 0) return { kind: "mate", moves: 1 };
+
+  return { kind: "mate", moves: -score.moves };
 }
 
 /**
@@ -38,7 +43,11 @@ export function invert(score: Score): Score {
  */
 export function toCp(score: Score): number {
   if (score.kind === "cp") return score.cp;
-  if (score.moves === 0) return score.moves >= 0 ? MATE_CP : -MATE_CP;
+
+  // `mate 0` means the side to move is ALREADY checkmated — the worst
+  // possible score, not the best. Stockfish emits it for a finished position.
+  if (score.moves === 0) return -MATE_CP;
+
   const magnitude = MATE_CP - Math.min(Math.abs(score.moves), 99);
   return score.moves > 0 ? magnitude : -magnitude;
 }
@@ -50,6 +59,7 @@ export function toCp(score: Score): number {
  *   50 + 50 * (2 / (1 + exp(-0.00368208 * cp)) - 1)
  */
 export function winPct(score: Score): number {
+  // `mate 0` is an already-checkmated side to move: certainty of loss.
   if (score.kind === "mate") return score.moves > 0 ? 100 : 0;
 
   const cp = clamp(score.cp, -WIN_PCT_CLAMP, WIN_PCT_CLAMP);
@@ -117,14 +127,15 @@ export function classify(options: {
  * White's perspective, used to measure volatility around each move.
  */
 export function gameAccuracy(
-  moveAccuracies: number[],
+  moves: Array<{ accuracy: number; positionIndex: number }>,
   winPercents: number[],
 ): number | undefined {
-  if (moveAccuracies.length === 0) return undefined;
+  if (moves.length === 0) return undefined;
 
-  const weights = volatilityWeights(moveAccuracies.length, winPercents);
-  const weighted = weightedMean(moveAccuracies, weights);
-  const harmonic = harmonicMean(moveAccuracies);
+  const accuracies = moves.map((m) => m.accuracy);
+  const weights = volatilityWeights(moves, winPercents);
+  const weighted = weightedMean(accuracies, weights);
+  const harmonic = harmonicMean(accuracies);
 
   return clamp((weighted + harmonic) / 2, 0, 100);
 }
@@ -132,28 +143,27 @@ export function gameAccuracy(
 /**
  * Standard deviation of win percentage in a window around each move — high
  * where the game was swinging, low where it was quiet.
+ *
+ * Each move carries its own index into the position sequence. Mapping a
+ * colour-filtered list proportionally instead would weight every one of
+ * Black's moves by the volatility around White's.
  */
-function volatilityWeights(count: number, winPercents: number[]): number[] {
-  if (winPercents.length === 0) return new Array(count).fill(1);
+function volatilityWeights(
+  moves: Array<{ positionIndex: number }>,
+  winPercents: number[],
+): number[] {
+  if (winPercents.length === 0) return new Array(moves.length).fill(1);
 
   const windowSize = clamp(Math.floor(winPercents.length / 10), 2, 8);
-  const weights: number[] = [];
 
-  for (let i = 0; i < count; i += 1) {
-    // Map this move onto the position sequence it sits in.
-    const centre = Math.min(
-      Math.floor((i / Math.max(count, 1)) * winPercents.length),
-      winPercents.length - 1,
-    );
+  return moves.map(({ positionIndex }) => {
+    const centre = clamp(positionIndex, 0, winPercents.length - 1);
     const from = Math.max(0, centre - windowSize);
     const to = Math.min(winPercents.length, centre + windowSize + 1);
-    const window = winPercents.slice(from, to);
 
     // A floor of 0.5 keeps a completely quiet stretch from weighing nothing.
-    weights.push(Math.max(standardDeviation(window), 0.5));
-  }
-
-  return weights;
+    return Math.max(standardDeviation(winPercents.slice(from, to)), 0.5);
+  });
 }
 
 function weightedMean(values: number[], weights: number[]): number {
