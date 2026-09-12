@@ -45,9 +45,15 @@ export type ReviewGraphPoint = {
 };
 
 export type Review = {
+  /**
+   * Indexed by ply: position 0 is the starting position, position N is the one
+   * reached after ply N. The board, the eval bar, the scoresheet and the graph
+   * all address positions by this same number.
+   */
   positions: ReviewPosition[];
   graph: ReviewGraphPoint[];
   orientation: "white" | "black";
+  lastPositionIndex: number;
 };
 
 /** Classifications worth interrupting the reviewer with an arrow. */
@@ -63,7 +69,7 @@ export function buildReview({
   const orientation = userColor === "b" ? "black" : "white";
 
   if (moves.length === 0) {
-    return { positions: [], graph: [], orientation };
+    return { positions: [], graph: [], orientation, lastPositionIndex: 0 };
   }
 
   const positions: ReviewPosition[] = moves.map((move) => ({
@@ -74,15 +80,17 @@ export function buildReview({
 
   // Rows store the position before each move, so the position the game ended
   // in belongs to no row and has to be played out from the last one.
-  positions.push({
-    fen: finalFen(moves.at(-1)!),
-    lastMove: undefined,
-    bestMove: undefined,
-  });
+  const final = finalFen(moves.at(-1)!);
+  if (final) {
+    positions.push({ fen: final, lastMove: undefined, bestMove: undefined });
+  }
 
   // Each move highlights on the position it produced, which is the next one.
+  // The last move has no following position if the final one could not be
+  // derived, so this stops at what actually exists.
   for (const [index, move] of moves.entries()) {
-    positions[index + 1]!.lastMove = squaresOf(move.uci);
+    const next = positions[index + 1];
+    if (next) next.lastMove = squaresOf(move.uci);
   }
 
   const graph: ReviewGraphPoint[] = [];
@@ -90,6 +98,8 @@ export function buildReview({
     const score = whitePovScore(move);
     if (!score) continue;
     graph.push({
+      // The position this move led to. Everything — board, eval bar, graph
+      // cursor, scoresheet selection — keys off this one number.
       positionIndex: index + 1,
       whiteWinPct: winPct(score),
       classification: move.classification,
@@ -97,7 +107,7 @@ export function buildReview({
     });
   }
 
-  return { positions, graph, orientation };
+  return { positions, graph, orientation, lastPositionIndex: positions.length - 1 };
 }
 
 /**
@@ -132,20 +142,28 @@ function squaresOf(uci: string): [Key, Key] | undefined {
   return [from as Key, to as Key];
 }
 
-/** Play the last move out to get the position the game finished in. */
-function finalFen(last: ReviewMoveInput): string {
+/**
+ * Play the last move out to get the position the game finished in.
+ *
+ * Returns undefined rather than falling back to the position before the move:
+ * a duplicate final position would show the board one move behind while the
+ * evaluation beside it described the move that had already been played.
+ */
+function finalFen(last: ReviewMoveInput): string | undefined {
   try {
     const chess = new Chess(last.fenBefore);
-    chess.move(last.uci.length >= 4 ? {
-      from: last.uci.slice(0, 2),
-      to: last.uci.slice(2, 4),
-      promotion: last.uci.slice(4) || undefined,
-    } : last.san);
+    chess.move(
+      last.uci.length >= 4
+        ? {
+            from: last.uci.slice(0, 2),
+            to: last.uci.slice(2, 4),
+            promotion: last.uci.slice(4) || undefined,
+          }
+        : last.san,
+    );
     return chess.fen();
   } catch {
-    // An unreplayable last move should cost the final position, not the whole
-    // review; the board simply stays on the position before it.
-    return last.fenBefore;
+    return undefined;
   }
 }
 

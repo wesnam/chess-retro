@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { graphGeometry } from "./eval-graph";
+import { graphGeometry, hitWidth } from "./eval-graph";
 
 /**
  * The graph's geometry, separated from its SVG so the mapping from win
@@ -51,14 +51,16 @@ describe("graphGeometry", () => {
     expect(points[0]!.y).toBeGreaterThan(HEIGHT / 2);
   });
 
-  it("spreads points across the full width", () => {
+  it("spreads points across the full width, leaving room for the start", () => {
+    // Position 0 is the starting position, before any move was played. The
+    // first move therefore sits one step in, not hard against the left edge.
     const { points } = graphGeometry({
       points: [point(50, 1), point(50, 2), point(50, 3)],
       width: WIDTH,
       height: HEIGHT,
     });
 
-    expect(points[0]!.x).toBeCloseTo(0, 5);
+    expect(points[0]!.x).toBeCloseTo(WIDTH / 3, 5);
     expect(points[2]!.x).toBeCloseTo(WIDTH, 5);
   });
 
@@ -110,11 +112,51 @@ describe("graphGeometry", () => {
     expect(areaPath.endsWith("Z")).toBe(true);
   });
 
+  it("spaces points so the graph reflects when moves were played", () => {
+    // Points are laid out by their position in the game, not by their order in
+    // the list, so a move without an evaluation leaves a gap rather than
+    // silently compressing the timeline.
+    const { points } = graphGeometry({
+      points: [point(50, 1), point(50, 5)],
+      width: WIDTH,
+      height: HEIGHT,
+      lastPositionIndex: 5,
+    });
+
+    expect(points[0]!.x).toBeCloseTo(WIDTH / 5, 5);
+    expect(points[1]!.x).toBeCloseTo(WIDTH, 5);
+  });
+
   it("returns nothing to draw when there are no points", () => {
     const geometry = graphGeometry({ points: [], width: WIDTH, height: HEIGHT });
 
     expect(geometry.points).toEqual([]);
     expect(geometry.linePath).toBe("");
     expect(geometry.areaPath).toBe("");
+  });
+});
+
+describe("hitWidth", () => {
+  it("covers the gap between points, leaving no dead band", () => {
+    // Click targets narrower than the spacing leave stripes of graph that
+    // swallow a click, which reads as the graph being broken.
+    const { points } = graphGeometry({
+      points: [point(50, 1), point(50, 2), point(50, 3)],
+      width: WIDTH,
+      height: HEIGHT,
+    });
+
+    const spacing = points[1]!.x - points[0]!.x;
+    expect(hitWidth(points, WIDTH)).toBeGreaterThanOrEqual(spacing);
+  });
+
+  it("covers the whole width when there is only one point", () => {
+    const { points } = graphGeometry({
+      points: [point(50, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+    });
+
+    expect(hitWidth(points, WIDTH)).toBeGreaterThanOrEqual(WIDTH);
   });
 });

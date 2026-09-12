@@ -127,6 +127,10 @@ different problems with different remedies. Averaging them describes a player wh
   positions, arrows and graph points, and `eval-graph.ts` turns those into coordinates. Both are
   pure and directly tested; the components are wiring. Note SVG's y axis grows downward, so White
   being better must give a *smaller* y.
+- **Positions are indexed by ply**: position 0 is the starting position, position N is the one
+  reached after ply N. The board, the evaluation bar, the scoresheet and the graph all address
+  positions by that single number — keeping them on one index is what stops the board showing one
+  position while the evaluation beside it describes another.
 - **Stored rows hold the position *before* each move**, so a game of P plies yields P positions and
   the final one has to be played out from the last row — otherwise the board can never show how the
   game actually ended.

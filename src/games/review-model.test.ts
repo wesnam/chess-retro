@@ -83,6 +83,38 @@ describe("buildReview", () => {
     expect(review.positions[1]!.lastMove).toEqual(["a7", "a8"]);
   });
 
+  it("indexes positions by ply, so the board and the evaluation agree", () => {
+    // The board, the eval bar and the scoresheet all key off the same number.
+    // Position N must be the position reached after ply N, or a click on a
+    // move shows one position with another's evaluation.
+    const review = buildReview({
+      moves: [
+        move({ ply: 1, uci: "e2e4", fenBefore: START }),
+        move({ ply: 2, uci: "e7e5", fenBefore: AFTER_E4 }),
+      ],
+      userColor: "w",
+    });
+
+    expect(review.positions[1]!.fen).toBe(AFTER_E4);
+    expect(review.graph.map((g) => g.positionIndex)).toEqual([1, 2]);
+  });
+
+  it("stops at the last position it could actually derive", () => {
+    // An unreplayable last move leaves no final position. Stepping must stop
+    // at the last real one rather than at an index holding nothing.
+    const review = buildReview({
+      moves: [
+        move({ ply: 1, uci: "e2e4", san: "e4", fenBefore: START }),
+        move({ ply: 2, uci: "h7h8", san: "??", fenBefore: AFTER_E4 }),
+      ],
+      userColor: "w",
+    });
+
+    expect(review.positions).toHaveLength(2);
+    expect(review.lastPositionIndex).toBe(1);
+    expect(review.positions[review.lastPositionIndex]).toBeDefined();
+  });
+
   it("orients the board to the colour the person played", () => {
     expect(buildReview({ moves: [], userColor: "b" }).orientation).toBe("black");
     expect(buildReview({ moves: [], userColor: "w" }).orientation).toBe("white");

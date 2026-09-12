@@ -28,9 +28,14 @@ export function Board({
   const api = useRef<Api | null>(null);
 
   useEffect(() => {
-    if (!mount.current) return;
+    // The ref is always attached by the time an effect runs, since the div is
+    // rendered unconditionally below. Asserted rather than guarded with an
+    // early return: a silent bail with an empty dependency list would leave a
+    // permanently blank board that never retries.
+    const element = mount.current;
+    if (!element) throw new Error("Board mounted without its container");
 
-    const board = Chessground(mount.current, {
+    const board = Chessground(element, {
       viewOnly: true,
       coordinates: true,
       // Reviewing is stepping, often quickly. A long animation makes the board

@@ -30,7 +30,7 @@ export function GameReview({
 
   // Position 0 is the starting position; position N is after ply N.
   const [index, setIndex] = useState(0);
-  const lastPosition = review.positions.length - 1;
+  const lastPosition = review.lastPositionIndex;
 
   const step = useCallback(
     (delta: number) => {
@@ -53,17 +53,19 @@ export function GameReview({
         return;
       }
 
+      // Only the horizontal keys are claimed. Up/Down/Home/End belong to
+      // scrolling the page, and taking them makes a long game unreadable.
       const actions: Record<string, () => void> = {
         ArrowLeft: () => step(-1),
         ArrowRight: () => step(1),
-        ArrowUp: () => setIndex(0),
-        ArrowDown: () => setIndex(lastPosition),
-        Home: () => setIndex(0),
-        End: () => setIndex(lastPosition),
       };
 
       const action = actions[event.key];
       if (!action) return;
+      // Modified presses are the browser's (back/forward, word navigation).
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
       event.preventDefault();
       action();
     }
@@ -74,7 +76,10 @@ export function GameReview({
 
   const position = review.positions[index];
   // The evaluation shown is the one for the move that LED to this position.
-  const currentMove = index > 0 ? moves[index - 1] : undefined;
+  // Looked up by ply rather than by array position: those coincide today, but
+  // tying the board, the bar and the highlight to three different indexing
+  // schemes is how they quietly drift apart later.
+  const currentMove = moves.find((move) => move.ply === index);
   const score = currentMove ? whitePovScore(currentMove) : undefined;
   const fraction = evalBarFraction(score);
 
@@ -112,6 +117,7 @@ export function GameReview({
         <EvalGraph
           points={review.graph}
           current={index}
+          lastPositionIndex={review.lastPositionIndex}
           onSelect={setIndex}
         />
       )}

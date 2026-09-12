@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { graphGeometry } from "./eval-graph";
+import { graphGeometry, hitWidth } from "./eval-graph";
 import type { ReviewGraphPoint } from "@/games/review-model";
 
 const WIDTH = 720;
@@ -16,15 +16,23 @@ const HEIGHT = 96;
 export function EvalGraph({
   points,
   current,
+  lastPositionIndex,
   onSelect,
 }: {
   points: ReviewGraphPoint[];
   current: number;
+  lastPositionIndex: number;
   onSelect: (positionIndex: number) => void;
 }) {
   const geometry = useMemo(
-    () => graphGeometry({ points, width: WIDTH, height: HEIGHT }),
-    [points],
+    () =>
+      graphGeometry({
+        points,
+        width: WIDTH,
+        height: HEIGHT,
+        lastPositionIndex,
+      }),
+    [points, lastPositionIndex],
   );
 
   if (geometry.points.length === 0) return null;
@@ -78,9 +86,13 @@ export function EvalGraph({
           />
         )}
 
-        {/* Invisible hit targets: clicking the graph jumps to that move. */}
-        {geometry.points.map((p, index) => {
-          const half = WIDTH / Math.max(1, geometry.points.length) / 2;
+        {/*
+          Invisible hit targets: clicking the graph jumps to that move. Sized
+          to the real spacing so neighbours overlap slightly — anything
+          narrower leaves stripes that swallow a click.
+        */}
+        {geometry.points.map((p) => {
+          const half = hitWidth(geometry.points, WIDTH) / 2;
           return (
             <rect
               key={p.positionIndex}
@@ -91,7 +103,7 @@ export function EvalGraph({
               className="graph-hit"
               onClick={() => onSelect(p.positionIndex)}
             >
-              <title>{`Move ${index + 1}`}</title>
+              <title>{`Move ${Math.ceil(p.positionIndex / 2)}`}</title>
             </rect>
           );
         })}

@@ -24,10 +24,17 @@ export function graphGeometry({
   points,
   width,
   height,
+  lastPositionIndex,
 }: {
   points: ReviewGraphPoint[];
   width: number;
   height: number;
+  /**
+   * The last position in the game. Points are spaced along this rather than by
+   * their order in the list, so a move with no evaluation leaves a gap instead
+   * of compressing the timeline into something that misreads as faster play.
+   */
+  lastPositionIndex?: number;
 }): GraphGeometry {
   const midline = height / 2;
 
@@ -35,12 +42,13 @@ export function graphGeometry({
     return { points: [], linePath: "", areaPath: "", midline };
   }
 
-  // A single point would otherwise divide by zero; put it at the left edge.
-  const span = Math.max(1, points.length - 1);
+  const finalIndex = lastPositionIndex ?? points.at(-1)!.positionIndex;
+  // A single point at index 0 would otherwise divide by zero.
+  const span = Math.max(1, finalIndex);
 
-  const placed: GraphPoint[] = points.map((point, index) => ({
+  const placed: GraphPoint[] = points.map((point) => ({
     ...point,
-    x: (index / span) * width,
+    x: (point.positionIndex / span) * width,
     // 100% for White is the top of the box, 0% the bottom.
     y: height - (point.whiteWinPct / 100) * height,
   }));
@@ -58,4 +66,16 @@ export function graphGeometry({
     .join(" ")} L ${last.x} ${midline} Z`;
 
   return { points: placed, linePath, areaPath, midline };
+}
+
+/**
+ * Width of a click target on the graph.
+ *
+ * Sized to the real spacing between points and rounded up, so adjacent targets
+ * overlap slightly rather than leaving dead stripes that swallow a click.
+ */
+export function hitWidth(points: GraphPoint[], width: number): number {
+  if (points.length < 2) return width;
+  const spacing = (points.at(-1)!.x - points[0]!.x) / (points.length - 1);
+  return Math.max(spacing, width / points.length);
 }
