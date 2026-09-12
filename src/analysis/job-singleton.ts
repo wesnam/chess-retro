@@ -1,6 +1,7 @@
 import { getDb } from "@/db/client";
 import { poolSize, startPool, type ResilientEngine } from "@/engine/pool";
 import { AnalysisJob, countPending, reclaimOrphanedGames, type Progress } from "./batch";
+import { tagCorpus } from "./motifs/tag";
 
 /**
  * The one batch job for this server.
@@ -93,7 +94,19 @@ export async function startJob(user: string): Promise<JobState> {
   globalThis.__chessRetroJob = { job, engines, user };
 
   // Deliberately not awaited: the caller gets progress, not a finished corpus.
-  void job.run().catch(() => {
+  void job
+    .run()
+    .then(() => {
+      // Tagging needs no engine and runs over rows already stored, so it costs
+      // seconds on a whole corpus and keeps the motifs in step with analysis.
+      try {
+        tagCorpus(db, user);
+      } catch {
+        // Tags are derived data: a failure here must not mark a finished
+        // analysis as failed. The next run picks the games up again.
+      }
+    })
+    .catch(() => {
     // Individual game failures are recorded against their rows; a throw here
     // would be a job-level fault, and leaving it unhandled would take the
     // server down.

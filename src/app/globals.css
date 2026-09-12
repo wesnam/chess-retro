@@ -618,3 +618,21 @@ button.move-slot:hover {
 .job-failed {
   color: var(--danger);
 }
+
+/* ------------------------------------------------------------------ motifs */
+
+.missed-motif {
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  font-size: 0.85rem;
+}
+
+.motif-dot {
+  margin-left: 0.3rem;
+  font-size: 0.6rem;
+  color: var(--danger);
+  vertical-align: middle;
+}

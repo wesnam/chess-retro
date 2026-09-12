@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getDb } from "@/db/client";
 import { asLiveRun } from "@/analysis/batch";
+import { tagGame } from "@/analysis/motifs/tag";
 import { getUsername } from "@/settings/settings";
 import { AlreadyRunningError, analyseAndStore, findGame } from "@/analysis/store";
 import { disposeEngine, getEngine } from "@/engine/singleton";
@@ -43,6 +44,14 @@ export async function POST(
     const analysis = await asLiveRun(owner, () =>
       analyseAndStore(db, game, engine, { owner }),
     );
+
+    // Tag immediately, so the review page can show what was missed rather
+    // than waiting for a corpus-wide pass. No engine time involved.
+    try {
+      tagGame(db, username, id, game.timeClass);
+    } catch {
+      // Tags are derived data; a failure must not fail the analysis.
+    }
     return NextResponse.json({
       status: "done",
       cached: false,

@@ -10,6 +10,8 @@ export type StoredGame = {
   pgn: string;
   userColor: string;
   analysisStatus: string;
+  /** Carried so motif tagging can denormalise it without a second lookup. */
+  timeClass: string;
 };
 
 /**
@@ -179,6 +181,7 @@ export function findGame(
       pgn: games.pgn,
       userColor: games.userColor,
       analysisStatus: games.analysisStatus,
+      timeClass: games.timeClass,
     })
     .from(games)
     .where(and(eq(games.id, gameId), eq(games.user, user)))

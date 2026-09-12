@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { games, moves } from "@/db/schema";
+import { games, moveMotifs, moves } from "@/db/schema";
 
 export type GameListRow = {
   id: string;
@@ -156,6 +156,39 @@ export function listMoves(db: Db, user: string, gameId: string): MoveRow[] {
     .where(and(eq(moves.gameId, gameId), eq(moves.user, user)))
     .orderBy(moves.ply)
     .all();
+}
+
+/**
+ * Tactics the user missed, by ply, for one game.
+ *
+ * Only the `missed` role: what the player found is not what they need to
+ * practise, and the opponent's tactics are not theirs to fix.
+ */
+export function listMissedMotifs(
+  db: Db,
+  user: string,
+  gameId: string,
+): Map<number, string[]> {
+  const rows = db
+    .select({ ply: moveMotifs.ply, motif: moveMotifs.motif })
+    .from(moveMotifs)
+    .where(
+      and(
+        eq(moveMotifs.gameId, gameId),
+        eq(moveMotifs.user, user),
+        eq(moveMotifs.role, "missed"),
+      ),
+    )
+    .orderBy(moveMotifs.ply)
+    .all();
+
+  const byPly = new Map<number, string[]>();
+  for (const row of rows) {
+    const existing = byPly.get(row.ply);
+    if (existing) existing.push(row.motif);
+    else byPly.set(row.ply, [row.motif]);
+  }
+  return byPly;
 }
 
 export type GameCounts = {

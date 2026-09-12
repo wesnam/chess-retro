@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/db/client";
 import { getUsername } from "@/settings/settings";
-import { getGame, listMoves } from "@/games/queries";
+import { getGame, listMissedMotifs, listMoves } from "@/games/queries";
 import { AnalyzeButton } from "./AnalyzeButton";
 import { GameReview } from "./GameReview";
 
@@ -22,6 +22,7 @@ export default async function GamePage({
   if (!game) notFound();
 
   const moves = listMoves(db, username, id);
+  const missedMotifs = listMissedMotifs(db, username, id);
   const analysed = game.analysisStatus === "done";
 
   return (
@@ -60,6 +61,7 @@ export default async function GamePage({
           moves={moves}
           userColor={game.userColor}
           analysed={analysed}
+          missedMotifs={Object.fromEntries(missedMotifs)}
         />
       )}
 

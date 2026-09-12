@@ -4,6 +4,7 @@ import type { Db } from "@/db/client";
 import { games } from "@/db/schema";
 import { analyseAndStore, type StoredGame } from "./store";
 import type { Analyser } from "./analyze-game";
+import { tagGame } from "./motifs/tag";
 
 /**
  * Analyse a whole corpus, resumably.
@@ -161,6 +162,15 @@ export class AnalysisJob {
       try {
         await analyseAndStore(this.db, game, engine, { alreadyClaimed: true });
         this.completed += 1;
+
+        // Tag while the game is fresh. No engine time, so this costs
+        // milliseconds against the seconds the analysis itself took.
+        try {
+          tagGame(this.db, game.user, game.id, game.timeClass);
+        } catch {
+          // Tags are derived data: a tagging failure must not turn a finished
+          // analysis into a failed game. `tagCorpus` picks it up later.
+        }
       } catch (error) {
         // One bad game must not end an overnight run. `analyseAndStore` has
         // already recorded the error against the game.
@@ -191,6 +201,7 @@ export class AnalysisJob {
           pgn: games.pgn,
           userColor: games.userColor,
           analysisStatus: games.analysisStatus,
+          timeClass: games.timeClass,
         })
         .from(games)
         .where(

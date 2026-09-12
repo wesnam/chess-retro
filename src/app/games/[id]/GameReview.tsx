@@ -9,6 +9,7 @@ import {
   whitePovScore,
 } from "@/games/review-model";
 import type { MoveRow } from "@/games/queries";
+import { missedSummary } from "@/analysis/motifs/labels";
 
 /**
  * The interactive review: one board, a clickable move list, an eval bar and an
@@ -18,10 +19,13 @@ export function GameReview({
   moves,
   userColor,
   analysed,
+  missedMotifs = {},
 }: {
   moves: MoveRow[];
   userColor: string;
   analysed: boolean;
+  /** Tactics the player missed, keyed by ply. */
+  missedMotifs?: Record<number, string[]>;
 }) {
   const review = useMemo(
     () => buildReview({ moves, userColor }),
@@ -105,11 +109,17 @@ export function GameReview({
           onJump={setIndex}
           score={score}
         />
+        {missedMotifs[index]?.length ? (
+          <p className="missed-motif">
+            You {missedSummary(missedMotifs[index]!)}.
+          </p>
+        ) : null}
         <ScoreSheet
           moves={moves}
           index={index}
           onSelect={setIndex}
           analysed={analysed}
+          missedMotifs={missedMotifs}
         />
       </div>
 
@@ -194,11 +204,13 @@ function ScoreSheet({
   index,
   onSelect,
   analysed,
+  missedMotifs,
 }: {
   moves: MoveRow[];
   index: number;
   onSelect: (index: number) => void;
   analysed: boolean;
+  missedMotifs: Record<number, string[]>;
 }) {
   const active = useRef<HTMLButtonElement>(null);
 
@@ -232,6 +244,7 @@ function ScoreSheet({
             onSelect={onSelect}
             analysed={analysed}
             activeRef={active}
+            missedMotifs={missedMotifs}
           />
           <MoveButton
             move={pair.black}
@@ -239,6 +252,7 @@ function ScoreSheet({
             onSelect={onSelect}
             analysed={analysed}
             activeRef={active}
+            missedMotifs={missedMotifs}
           />
         </li>
       ))}
@@ -252,14 +266,18 @@ function MoveButton({
   onSelect,
   analysed,
   activeRef,
+  missedMotifs,
 }: {
   move: MoveRow | undefined;
   index: number;
   onSelect: (index: number) => void;
   analysed: boolean;
   activeRef: React.RefObject<HTMLButtonElement | null>;
+  missedMotifs: Record<number, string[]>;
 }) {
   if (!move) return <span className="move-slot" />;
+
+  const missed = missedMotifs[move.ply];
 
   // Ply N is reached at position N.
   const isCurrent = index === move.ply;
@@ -274,6 +292,11 @@ function MoveButton({
       aria-current={isCurrent ? "true" : undefined}
     >
       <span className="san">{move.san}</span>
+      {missed?.length ? (
+        <span className="motif-dot" title={`You ${missedSummary(missed)}`}>
+          ◆
+        </span>
+      ) : null}
       {analysed && move.classification && (
         <span className={`tag ${move.classification}`}>
           {shortLabel(move.classification)}

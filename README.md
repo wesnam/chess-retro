@@ -23,7 +23,7 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 04 | Analyse one game and show its moves | ✅ done |
 | 05 | Interactive board for a reviewed game | ✅ done |
 | 06 | Batch-analyse the whole corpus, resumably | ✅ done |
-| 07 | Tag moves with tactical motifs | |
+| 07 | Tag moves with tactical motifs | ✅ done |
 | 08 | **Dashboard ranking your top weaknesses** | |
 | 09 | Plain-English coaching on each weakness | |
 | 10 | Puzzle practice matched to weaknesses | |
@@ -142,6 +142,15 @@ different problems with different remedies. Averaging them describes a player wh
 - **Pausing stops new games being taken; the ones in flight finish.** Anything that reuses or
   disposes a paused job's engines must `await job.settled()` first, or it writes to an engine
   mid-search and crosses two positions' results.
+- **A tactic counts as *missed* only when passing it over actually cost win probability.**
+  Without that floor every move the engine merely disagreed with is tagged: on the real corpus
+  that put 27 "missed" tags on moves classified *excellent*, more than on mistakes and blunders
+  combined. A tactic nobody lost anything by not playing is not a weakness.
+- **Motif detectors are deliberately conservative**, and measured against the corpus rather than
+  only against hand-built positions. A detector firing on ~9% of all moves is describing noise,
+  not a tactic — that check caught `discoveredAttack` tagging almost every pawn push.
+- **Motif names are Lichess's exact theme strings**, so ticket 10 can match puzzles by direct
+  lookup with no translation table. Display text lives in `motifs/labels.ts`, never in the data.
 - **A game marked `error` leaves the corpus until something re-queues it.** `countPending` excludes
   failures deliberately, so one bad game cannot retry forever and stall an overnight run.
 - **Positions are indexed by ply**: position 0 is the starting position, position N is the one
