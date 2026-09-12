@@ -8,7 +8,12 @@ import {
   type ArchiveMonth,
   type Fetcher,
 } from "./chesscom";
-import { mapGame, UnusableGameError, type MappedGame } from "./map-game";
+import {
+  mapGame,
+  NotThisUsersGameError,
+  UnusableGameError,
+  type MappedGame,
+} from "./map-game";
 
 export type SyncProgress = {
   month: ArchiveMonth;
@@ -22,8 +27,10 @@ export type SyncResult = {
   stored: number;
   /** Games already present, left untouched. */
   skipped: number;
-  /** Games that could not be attributed or parsed (variants, malformed PGN). */
+  /** Games we cannot analyse: variants, or a PGN that would not parse. */
   unusable: number;
+  /** Games in the archive that this user did not play in. Not a defect. */
+  notThisUser: number;
   monthsFetched: ArchiveMonth[];
 };
 
@@ -54,17 +61,23 @@ export async function syncGames(db: Db, options: SyncOptions): Promise<SyncResul
     stored: 0,
     skipped: 0,
     unusable: 0,
+    notThisUser: 0,
     monthsFetched: [],
   };
 
-  let stored = countGames(db, username);
+  let held = countGames(db, username);
 
-  for (const [index, month] of newestFirst.entries()) {
-    if (stored >= corpusLimit) break;
+  // Months we will actually request, so progress reflects real work rather
+  // than counting months that are skipped without a fetch.
+  const pending = newestFirst.filter(
+    (month) => month === thisMonth || !isMonthComplete(db, username, month),
+  );
 
-    if (month !== thisMonth && isMonthComplete(db, username, month)) {
-      continue;
-    }
+  for (const [index, month] of pending.entries()) {
+    // The current month is always re-checked: it is still accumulating games,
+    // and a game played today must be picked up even when the corpus is
+    // already at its limit.
+    if (held >= corpusLimit && month !== thisMonth) break;
 
     const rawGames = await fetchArchive(username, month, fetcher);
     const mapped: MappedGame[] = [];
@@ -72,6 +85,11 @@ export async function syncGames(db: Db, options: SyncOptions): Promise<SyncResul
       try {
         mapped.push(mapGame(raw, username));
       } catch (error) {
+        // Someone else's game is a routine filter, not a defect.
+        if (error instanceof NotThisUsersGameError) {
+          result.notThisUser += 1;
+          continue;
+        }
         if (error instanceof UnusableGameError) {
           result.unusable += 1;
           continue;
@@ -83,21 +101,38 @@ export async function syncGames(db: Db, options: SyncOptions): Promise<SyncResul
     // Newest first within the month, so a partial month keeps recent games.
     mapped.sort((a, b) => b.game.endTime - a.game.endTime);
 
+    // Past the limit we still accept games newer than everything we already
+    // hold — those are games played since the last sync, and dropping the
+    // newest game to keep an older one would be backwards. Anything older
+    // waits for a later sync with a raised limit.
+    //
+    // This only applies to a corpus that already has games: on a first sync
+    // every game is "newer" than nothing, which would ignore the limit.
+    const newestHeld = held > 0 ? newestEndTime(db, username) : Infinity;
+
+    let reachedLimit = false;
     for (const entry of mapped) {
-      if (stored >= corpusLimit) break;
-      const wrote = storeGame(db, entry);
-      if (wrote) {
+      if (held >= corpusLimit && entry.game.endTime <= newestHeld) {
+        reachedLimit = true;
+        break;
+      }
+      if (storeGame(db, entry)) {
         result.stored += 1;
-        stored += 1;
+        held += 1;
       } else {
         result.skipped += 1;
       }
     }
 
     recordMonth(db, username, month, {
-      gameCount: mapped.length,
-      // The current month is still accumulating, so it is never complete.
-      complete: month !== thisMonth,
+      // What we hold from this month in total, not what this run happened to
+      // touch, so a no-op sync does not erase the count.
+      gameCount: countGamesInMonth(db, username, month),
+      // Complete only when the whole month was taken. A month cut short by the
+      // corpus limit must stay incomplete, or raising the limit later could
+      // never backfill it. The current month is never complete regardless: it
+      // is still accumulating games.
+      complete: month !== thisMonth && !reachedLimit,
       now,
     });
     result.monthsFetched.push(month);
@@ -105,7 +140,7 @@ export async function syncGames(db: Db, options: SyncOptions): Promise<SyncResul
     onProgress?.({
       month,
       monthsDone: index + 1,
-      monthsTotal: newestFirst.length,
+      monthsTotal: pending.length,
       gamesStored: result.stored,
     });
   }
@@ -120,6 +155,36 @@ function countGames(db: Db, username: string): number {
     .where(eq(games.user, username))
     .get();
   return row?.n ?? 0;
+}
+
+/** How many games we hold from one archive month. */
+function countGamesInMonth(
+  db: Db,
+  username: string,
+  month: ArchiveMonth,
+): number {
+  const row = db
+    .select({ n: sql<number>`count(*)` })
+    .from(games)
+    .where(
+      and(
+        eq(games.user, username),
+        // end_time is unix seconds; compare on the UTC month it falls in.
+        sql`strftime('%Y-%m', ${games.endTime}, 'unixepoch') = ${month}`,
+      ),
+    )
+    .get();
+  return row?.n ?? 0;
+}
+
+/** End time of the newest game held, or 0 when none are. */
+function newestEndTime(db: Db, username: string): number {
+  const row = db
+    .select({ newest: sql<number | null>`max(${games.endTime})` })
+    .from(games)
+    .where(eq(games.user, username))
+    .get();
+  return row?.newest ?? 0;
 }
 
 function isMonthComplete(db: Db, username: string, month: ArchiveMonth): boolean {

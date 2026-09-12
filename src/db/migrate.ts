@@ -1,4 +1,32 @@
 /**
+ * The schema revision this build expects, tracked in SQLite's `user_version`.
+ * Raise it whenever an existing database would otherwise keep a stale shape
+ * that `CREATE TABLE IF NOT EXISTS` cannot correct.
+ *
+ * 1 — initial schema
+ * 2 — games keyed by (id, user); moves and motifs keyed and constrained to
+ *     match. One chess.com game id is shared by both players, so the old
+ *     single-column key silently rejected the second player's copy.
+ */
+export const SCHEMA_VERSION = 2;
+
+/**
+ * Tables dropped when upgrading from a pre-version-2 database. These hold
+ * downloaded and derived data only, all of it reproducible by re-syncing, so
+ * rebuilding them is cheaper and safer than an in-place key migration.
+ * Settings and puzzle tables are deliberately absent: they are not affected,
+ * and puzzles are expensive to re-import.
+ */
+export const V2_REBUILD_TABLES = [
+  "move_motifs",
+  "moves",
+  "games",
+  "sync_state",
+  "analysis_jobs",
+  "insights",
+];
+
+/**
  * Schema DDL, applied on every open. Every statement is IF NOT EXISTS, so this
  * is idempotent and safe to run against an existing database.
  *

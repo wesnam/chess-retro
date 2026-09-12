@@ -137,6 +137,44 @@ describe("time spent with an increment", () => {
   });
 });
 
+describe("gaps and anomalies in the clock record", () => {
+  it("does not charge a move for a gap in that player's clocks", () => {
+    // White's second move has no clock. Without forgetting the stale reading,
+    // White's third move would be charged for both moves' time.
+    const pgn = [
+      '[Event "Test"]',
+      '[TimeControl "600"]',
+      "",
+      "1. e4 {[%clk 0:10:00]} 1... e5 {[%clk 0:10:00]}",
+      "2. Nf3 2... Nc6 {[%clk 0:09:50]}",
+      "3. Bb5 {[%clk 0:09:40]} 3... a6 {[%clk 0:09:45]} *",
+    ].join("\n");
+
+    const parsed = parsePgn(pgn);
+
+    // White's 2nd move (ply 3) has no reading of its own.
+    expect(parsed.moves[2]!.clockMs).toBeUndefined();
+    // White's 3rd move (ply 5) cannot be measured, since the previous
+    // reading is unknown — not charged the full 20s since 10:00.
+    expect(parsed.moves[4]!.moveTimeMs).toBeUndefined();
+  });
+
+  it("clamps to zero rather than discarding an instant move", () => {
+    // A clock that rises by more than the increment is not trustworthy, but
+    // the move was still played instantly.
+    const pgn = [
+      '[Event "Test"]',
+      '[TimeControl "600"]',
+      "",
+      "1. e4 {[%clk 0:10:00]} 1... e5 {[%clk 0:10:00]}",
+      "2. Nf3 {[%clk 0:10:05]} 2... Nc6 {[%clk 0:09:55]} *",
+    ].join("\n");
+
+    const parsed = parsePgn(pgn);
+    expect(parsed.moves[2]!.moveTimeMs).toBe(0);
+  });
+});
+
 describe("a game with no clocks at all", () => {
   it("parses the moves and leaves the clocks empty", () => {
     const pgn = ['[Event "Test"]', "", "1. e4 e5 2. Nf3 *"].join("\n");

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   mapGame,
+  NotThisUsersGameError,
   openingFamilyOf,
   resultFor,
   UnusableGameError,
@@ -35,8 +36,11 @@ describe("result from the user's perspective", () => {
     expect(resultFor(raw)).toBe("draw");
   });
 
-  it("treats an unknown token as a loss rather than inventing a win", () => {
-    expect(resultFor(undefined)).toBe("loss");
+  it("reports an unknown token rather than guessing", () => {
+    // Guessing "loss" would quietly depress every measured figure if
+    // chess.com added a draw token we did not know about.
+    expect(resultFor(undefined)).toBeUndefined();
+    expect(resultFor("some_new_token")).toBeUndefined();
   });
 });
 
@@ -81,7 +85,7 @@ describe("colour attribution", () => {
 
   it("refuses a game the user did not play in", () => {
     expect(() => mapGame(findByWhite("Hikaru"), "someone_else")).toThrow(
-      UnusableGameError,
+      NotThisUsersGameError,
     );
   });
 
@@ -162,5 +166,20 @@ describe("games we cannot use", () => {
     expect(() => mapGame({ ...base, uuid: undefined }, "hikaru")).toThrow(
       UnusableGameError,
     );
+  });
+
+  it("skips a PGN the parser cannot read, rather than throwing raw", () => {
+    // chess.js raises its own parser error; if it escaped as-is the caller
+    // could not tell a bad game from a bug, and would abort the sync.
+    const broken = { ...base, pgn: '[Event "x"]\n\n1. zz9 ??' };
+    expect(() => mapGame(broken, "hikaru")).toThrow(UnusableGameError);
+  });
+
+  it("skips a game whose result token we do not recognise", () => {
+    const odd = {
+      ...base,
+      white: { ...base.white, result: "some_new_token" },
+    };
+    expect(() => mapGame(odd, "hikaru")).toThrow(UnusableGameError);
   });
 });

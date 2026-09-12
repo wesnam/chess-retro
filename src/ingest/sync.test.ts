@@ -232,6 +232,31 @@ describe("archive month bookkeeping", () => {
     );
   });
 
+  it("records how many games it holds from the month, not what this run wrote", async () => {
+    // A no-op sync must not erase the count recorded earlier.
+    const { fetcher } = stubChesscom({ "2024-03": gamesOf("hikaru") });
+    const now = new Date("2024-03-20T12:00:00Z");
+    const options = { username: "hikaru", corpusLimit: 2, fetcher, now };
+
+    await syncGames(db, options);
+    const countOf = () =>
+      db
+        .select({ n: syncState.gameCount })
+        .from(syncState)
+        .where(
+          and(
+            eq(syncState.user, "hikaru"),
+            eq(syncState.archiveMonth, "2024-03"),
+          ),
+        )
+        .get()?.n;
+
+    expect(countOf()).toBe(2);
+
+    await syncGames(db, options);
+    expect(countOf()).toBe(2);
+  });
+
   it("never marks the current month complete, since it is still filling up", async () => {
     const now = new Date("2024-03-20T12:00:00Z");
     const { fetcher } = stubChesscom({ "2024-03": gamesOf("hikaru") });
@@ -312,6 +337,47 @@ describe("corpus limit", () => {
     expect(stored).toHaveLength(1);
     // The kept game is from March, not the seeded January month.
     expect(stored[0]!.endTime).toBeGreaterThan(1);
+  });
+
+  it("backfills the rest of a month that the limit cut short", async () => {
+    // A month truncated by the limit must not be recorded as complete, or
+    // raising the limit later could never reach the games left behind.
+    const { fetcher } = stubChesscom({ "2024-03": gamesOf("hikaru") });
+    const base = { username: "hikaru", fetcher, now: NOW };
+
+    await syncGames(db, { ...base, corpusLimit: 1 });
+    expect(countFor("hikaru")).toBe(1);
+
+    const second = await syncGames(db, { ...base, corpusLimit: 3 });
+
+    expect(second.stored).toBeGreaterThan(0);
+    expect(countFor("hikaru")).toBe(3);
+  });
+
+  it("keeps re-checking the current month once the limit is reached", async () => {
+    // A game played today must still be picked up, even with a full corpus.
+    const now = new Date("2024-03-20T12:00:00Z");
+    const all = gamesOf("hikaru");
+    let served = all.slice(0, 2);
+
+    const fetcher: Fetcher = async (input) => {
+      const url = String(input);
+      const body = url.endsWith("/archives")
+        ? { archives: ["https://api.chess.com/pub/player/x/games/2024/03"] }
+        : { games: served };
+      return new Response(JSON.stringify(body), { status: 200 });
+    };
+
+    const options = { username: "hikaru", corpusLimit: 2, fetcher, now };
+    await syncGames(db, options);
+    expect(countFor("hikaru")).toBe(2);
+
+    // A newer game appears in the month we already filled.
+    served = [{ ...all[0], uuid: "played-today", end_time: 1_800_000_000 }, ...served];
+    const second = await syncGames(db, options);
+
+    expect(second.monthsFetched).toContain("2024-03");
+    expect(second.stored).toBe(1);
   });
 
   it("backfills further when the limit is raised", async () => {

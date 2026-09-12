@@ -100,10 +100,14 @@ export function parsePgn(pgn: string): ParsedPgn {
     const before = previousClock[color];
     if (before !== undefined && clockMs !== undefined) {
       // Time spent is the clock drop, plus whatever increment was added back.
-      const spent = before - clockMs + incrementMs;
-      moveTimeMs = spent >= 0 ? spent : undefined;
+      // A clock that rose by more than the increment means the reading cannot
+      // be trusted; clamp to zero rather than reporting negative time.
+      moveTimeMs = Math.max(0, before - clockMs + incrementMs);
     }
-    if (clockMs !== undefined) previousClock[color] = clockMs;
+
+    // Track this player's last reading, or forget it when a move has none:
+    // keeping a stale value would charge the next move for both.
+    previousClock[color] = clockMs;
 
     return {
       ply: index + 1,

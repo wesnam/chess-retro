@@ -39,10 +39,27 @@ const DRAW_RESULTS = new Set([
   "timevsinsufficient",
 ]);
 
-export function resultFor(raw: string | undefined): "win" | "loss" | "draw" {
+const LOSS_RESULTS = new Set([
+  "checkmated",
+  "timeout",
+  "resigned",
+  "lose",
+  "abandoned",
+  "kingofthehill",
+  "threecheck",
+  "bughousepartnerlose",
+]);
+
+/**
+ * chess.com reports one result token per player. Unknown tokens are reported
+ * rather than assumed: guessing "loss" would quietly depress every measured
+ * figure if chess.com ever adds a draw token we do not know about.
+ */
+export function resultFor(raw: string | undefined): "win" | "loss" | "draw" | undefined {
   if (raw === "win") return "win";
   if (raw && DRAW_RESULTS.has(raw)) return "draw";
-  return "loss";
+  if (raw && LOSS_RESULTS.has(raw)) return "loss";
+  return undefined;
 }
 
 /** The part of an opening name before the first colon or variation detail. */
@@ -54,7 +71,14 @@ export function openingFamilyOf(name: string | undefined): string | undefined {
   return family === "" ? undefined : family;
 }
 
+/** A game we cannot use: malformed, or a variant we do not analyse. */
 export class UnusableGameError extends Error {}
+
+/**
+ * Not this user's game. Routine when two players are tracked from one
+ * archive, so it is counted separately from a genuine data defect.
+ */
+export class NotThisUsersGameError extends UnusableGameError {}
 
 /**
  * Convert one chess.com game into the rows we store, from the perspective of
@@ -77,13 +101,28 @@ export function mapGame(raw: ChesscomGame, user: string): MappedGame {
     white === user ? "w" : black === user ? "b" : undefined;
 
   if (!userColor) {
-    throw new UnusableGameError(`${user} did not play in this game`);
+    throw new NotThisUsersGameError(`${user} did not play in this game`);
   }
 
   const mine = userColor === "w" ? raw.white : raw.black;
   const theirs = userColor === "w" ? raw.black : raw.white;
-  const parsed = parsePgn(raw.pgn);
+
+  // chess.js throws its own parser error on a malformed PGN. Convert it, so a
+  // single bad game is skipped rather than aborting the whole sync.
+  let parsed;
+  try {
+    parsed = parsePgn(raw.pgn);
+  } catch (cause) {
+    throw new UnusableGameError(`could not parse PGN: ${String(cause)}`);
+  }
   const openingName = parsed.openingName;
+
+  const userResult = resultFor(mine?.result);
+  if (!userResult) {
+    throw new UnusableGameError(
+      `unrecognised chess.com result: ${mine?.result ?? "(none)"}`,
+    );
+  }
 
   return {
     game: {
@@ -94,7 +133,7 @@ export function mapGame(raw: ChesscomGame, user: string): MappedGame {
       timeClass: raw.time_class ?? "unknown",
       timeControl: raw.time_control ?? parsed.timeControl ?? null,
       userColor,
-      userResult: resultFor(mine?.result),
+      userResult,
       userResultRaw: mine?.result ?? null,
       userRating: mine?.rating ?? null,
       opponentUsername: theirs?.username ?? null,
