@@ -149,13 +149,29 @@ export function isSoftlyDefended(chess: Chess, square: Square): boolean {
  * The captured piece must be worth more than whatever the capturer stands to
  * lose to the recapture.
  */
-export function winsMaterial(chess: Chess, from: Square, to: Square): boolean {
-  const target = chess.get(to);
+export function winsMaterial(
+  chess: Chess,
+  from: Square,
+  to: Square,
+  /**
+   * What was captured, when the caller already knows. Needed for en passant,
+   * where the captured pawn does not stand on the destination square and
+   * reading the board there finds nothing.
+   */
+  captured?: PieceSymbol,
+): boolean {
   const mover = chess.get(from);
-  if (!target || !mover) return false;
+  if (!mover) return false;
+
+  const target = chess.get(to) ?? (captured ? { type: captured } : undefined);
+  if (!target) return false;
 
   const gained = pieceValue(target.type);
-  const defenders = defendersOf(chess, to);
+  // For en passant the destination is empty, so ask who covers it rather than
+  // who defends a piece standing there.
+  const defenders = chess.get(to)
+    ? defendersOf(chess, to)
+    : attackersOf(chess, to, opposite(mover.color));
 
   // Undefended: anything worth taking is a gain.
   if (defenders.length === 0) return gained > 0;

@@ -10,8 +10,10 @@
  * 3 — games.analysis_owner, so orphan reclaim can tell a crashed run's games
  *     from a live run's. Added in place: unlike 2 this is a new column, and
  *     rebuilding would throw away a corpus that takes hours to re-analyse.
+ * 4 — games.motifs_tagged_at, so a game with no tactics is not re-tagged on
+ *     every pass. Also added in place.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * Tables dropped when upgrading from a pre-version-2 database. These hold
@@ -68,6 +70,8 @@ CREATE TABLE IF NOT EXISTS games (
   analyzed_at          INTEGER,
   -- Which run holds this game while its status is running; see schema.ts.
   analysis_owner       TEXT,
+  -- When motif tagging last ran; see schema.ts.
+  motifs_tagged_at     INTEGER,
   accuracy_user        REAL,
   cc_accuracy_user     REAL,
   cc_accuracy_opponent REAL,

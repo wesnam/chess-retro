@@ -109,9 +109,15 @@ export function GameReview({
           onJump={setIndex}
           score={score}
         />
-        {missedMotifs[index]?.length ? (
+        {/*
+          The tactic was available at the position the ply was played FROM,
+          which is position index + 1 in ply terms. Keyed off `index + 1` so
+          the note appears on the same position as the best-move arrow rather
+          than one step after it.
+        */}
+        {missedMotifs[index + 1]?.length ? (
           <p className="missed-motif">
-            You {missedSummary(missedMotifs[index]!)}.
+            You {missedSummary(missedMotifs[index + 1]!)}.
           </p>
         ) : null}
         <ScoreSheet

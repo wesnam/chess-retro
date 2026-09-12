@@ -72,6 +72,11 @@ function migrate(sqlite: Database.Database): void {
   if (existing < 3) {
     addColumnIfMissing(sqlite, "games", "analysis_owner", "TEXT");
   }
+
+  // Version 4 added games.motifs_tagged_at.
+  if (existing < 4) {
+    addColumnIfMissing(sqlite, "games", "motifs_tagged_at", "INTEGER");
+  }
 }
 
 /**

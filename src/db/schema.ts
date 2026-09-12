@@ -70,6 +70,12 @@ export const games = sqliteTable(
      * second worker, and one result would overwrite the other.
      */
     analysisOwner: text("analysis_owner"),
+    /**
+     * When motif tagging last ran for this game. A game with no tactics at all
+     * has no motif rows, so the absence of rows cannot mean "not yet tagged"
+     * — without this marker such games are re-detected on every pass forever.
+     */
+    motifsTaggedAt: integer("motifs_tagged_at"),
     /** Our own accuracy figure for the user, from the Lichess method. */
     accuracyUser: real("accuracy_user"),
     /**

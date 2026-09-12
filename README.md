@@ -105,7 +105,8 @@ different problems with different remedies. Averaging them describes a player wh
 - **Schema** lives in two places that must be changed together: `src/db/schema.ts` (Drizzle, used for
   queries) and `src/db/migrate.ts` (DDL, applied on open). `schema.test.ts` asserts they agree.
   Changing the shape of an existing table also needs a `SCHEMA_VERSION` bump and a step in
-  `client.ts`. Prefer `ALTER TABLE ADD COLUMN` over the drop-and-rebuild that version 2 used: an
+  `client.ts`, and the migration test asserts against `SCHEMA_VERSION` so only its column
+  expectations need extending. Prefer `ALTER TABLE ADD COLUMN` over the drop-and-rebuild that version 2 used: an
   analysed corpus costs hours of engine time, and rebuilding throws it away.
 - **Every game and move row carries `user`**, and `user` + `time_class` are denormalised onto move and
   motif rows. The first keeps two chess.com accounts from blending into one set of conclusions; the
@@ -149,6 +150,9 @@ different problems with different remedies. Averaging them describes a player wh
 - **Motif detectors are deliberately conservative**, and measured against the corpus rather than
   only against hand-built positions. A detector firing on ~9% of all moves is describing noise,
   not a tactic — that check caught `discoveredAttack` tagging almost every pawn push.
+- **Escape squares must be read from a board with the check removed.** chess.js only yields
+  check-evasions while a king is in check, so every other piece reports zero moves — which made
+  any check that also attacked something look like a trapped piece.
 - **Motif names are Lichess's exact theme strings**, so ticket 10 can match puzzles by direct
   lookup with no translation table. Display text lives in `motifs/labels.ts`, never in the data.
 - **A game marked `error` leaves the corpus until something re-queues it.** `countPending` excludes

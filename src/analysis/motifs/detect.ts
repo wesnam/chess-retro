@@ -141,7 +141,14 @@ const DETECTORS: Detector[] = [
       // A capture that wins material because the target was not adequately
       // defended. An even trade is not a hanging piece.
       if (!move.captured) return false;
-      return winsMaterial(before, move.from as Square, move.to as Square);
+      // `move.captured` is passed through for en passant, where the captured
+      // pawn is not standing on the destination square.
+      return winsMaterial(
+        before,
+        move.from as Square,
+        move.to as Square,
+        move.captured,
+      );
     },
   },
 
@@ -239,7 +246,10 @@ const DETECTORS: Detector[] = [
         .filter((f): f is string => f !== undefined)
         .map((f) => `${f}${escapeRank}` as Square);
 
-      return ahead.some((square) => after.get(square)?.color === enemy);
+      // EVERY forward escape must be blocked by the king's own pieces. With
+      // `some`, Scholar's mate qualified because one pawn still stood on d7 —
+      // a mate delivered to the king's face, not along the back rank.
+      return ahead.every((square) => after.get(square)?.color === enemy);
     },
   },
 
@@ -403,22 +413,60 @@ function nextAlong(
   return undefined;
 }
 
-/** Has the piece on `square` no square to run to that the enemy does not cover? */
+/**
+ * Has the piece on `square` no square to run to that the enemy does not cover?
+ *
+ * Escape squares are taken from the piece's own geometry on a board with the
+ * check removed. `attackedBy` reads chess.js's legal moves, and under check
+ * those are only the king's evasions — so every other piece would report zero
+ * escapes and any check that also attacked something read as a trapped piece.
+ */
 function isTrapped(
   chess: Chess,
   square: Square,
   attacker: "w" | "b",
   owner: "w" | "b",
 ): boolean {
-  const escapes = attackedBy(chess, square).filter((to) => {
-    const occupant = chess.get(to);
+  const board = withoutCheck(chess, square, owner);
+  if (!board) return false;
+
+  const escapes = attackedBy(board, square).filter((to) => {
+    const occupant = board.get(to);
     if (occupant && occupant.color === owner) return false;
     // Capturing its way out counts as an escape when the capture is winning.
-    if (occupant && winsMaterial(chess, square, to)) return true;
-    return chess.attackers(to, attacker).length === 0;
+    if (occupant && winsMaterial(board, square, to)) return true;
+    return board.attackers(to, attacker).length === 0;
   });
 
   return escapes.length === 0;
+}
+
+/**
+ * The position with the owner's king removed, so a piece's mobility can be
+ * read without check evasion masking it.
+ *
+ * Returns undefined when the result cannot be loaded, in which case the
+ * detector says nothing rather than guessing.
+ */
+function withoutCheck(
+  chess: Chess,
+  keep: Square,
+  owner: "w" | "b",
+): Chess | undefined {
+  if (!chess.isCheck()) return chess;
+
+  const board = new Chess(chess.fen());
+  const king = findKing(board, owner);
+  // Never strip the piece being asked about.
+  if (!king || king === keep) return undefined;
+
+  board.remove(king);
+  try {
+    // Reload so chess.js recomputes from the edited board.
+    return new Chess(board.fen());
+  } catch {
+    return undefined;
+  }
 }
 
 function ownPieces(chess: Chess, color: "w" | "b"): Square[] {

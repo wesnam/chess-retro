@@ -98,6 +98,18 @@ describe("backRankMate", () => {
     );
   });
 
+  it("does not call a mate in the middle of the board a back-rank mate", () => {
+    // Scholar's mate. The king is on its own back rank with pieces near it,
+    // but it is mated by a queen on f7, not boxed in along the rank — the
+    // escape squares must ALL be blocked by its own pieces, not merely one.
+    expect(
+      motifs(
+        "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+        "f3f7",
+      ),
+    ).not.toContain("backRankMate");
+  });
+
   it("does not tag a back-rank check the king can escape", () => {
     // Luft: the h-pawn has moved, so the king walks out.
     expect(motifs("6k1/5pp1/7p/8/8/8/8/R3K3 w - - 0 1", "a1a8")).not.toContain(
@@ -177,6 +189,25 @@ describe("trappedPiece", () => {
     expect(motifs("4k3/8/8/3b4/8/8/8/4K3 b - - 0 1", "d5e4")).not.toContain(
       "trappedPiece",
     );
+  });
+
+  it("does not tag every piece on the board when the move gives check", () => {
+    // Escape squares come from chess.js's legal moves, which under check are
+    // only the king's evasions — so every other enemy piece looks stuck. That
+    // makes any check-plus-attack read as a trapped piece: this fork position
+    // was falsely tagged even though the a8 rook has a whole rank and file.
+    expect(motifs("r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1", "b5c7")).not.toContain(
+      "trappedPiece",
+    );
+  });
+
+  it("does not tag a checkmate as a trapped piece", () => {
+    expect(
+      motifs(
+        "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1",
+        "f3f7",
+      ),
+    ).not.toContain("trappedPiece");
   });
 });
 

@@ -96,9 +96,13 @@ export async function startJob(user: string): Promise<JobState> {
   // Deliberately not awaited: the caller gets progress, not a finished corpus.
   void job
     .run()
-    .then(() => {
-      // Tagging needs no engine and runs over rows already stored, so it costs
-      // seconds on a whole corpus and keeps the motifs in step with analysis.
+    .then((progress) => {
+      // Only on genuine completion. `run()` also resolves on pause, and a
+      // synchronous corpus-wide pass there would block the event loop —
+      // freezing the progress poll and the Resume button with it. Each game is
+      // already tagged as it finishes, so this only sweeps up stragglers.
+      if (progress.status !== "done") return;
+
       try {
         tagCorpus(db, user);
       } catch {

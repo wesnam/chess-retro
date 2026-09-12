@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { createDb } from "./client";
+import { SCHEMA_VERSION } from "./migrate";
 
 /**
  * These assert the database a fresh install produces: the pragmas the app
@@ -254,6 +255,7 @@ describe("schema", () => {
       .run();
     // Pretend this database predates the analysis_owner column.
     seed.exec("ALTER TABLE games DROP COLUMN analysis_owner");
+    seed.exec("ALTER TABLE games DROP COLUMN motifs_tagged_at");
     seed.pragma("user_version = 2");
     seed.close();
 
@@ -270,8 +272,11 @@ describe("schema", () => {
     raw.close();
 
     expect(cols).toContain("analysis_owner");
+    expect(cols).toContain("motifs_tagged_at");
     expect(n, "the existing game must survive the upgrade").toBe(1);
-    expect(version).toBe(3);
+    // Asserted against the constant, so a later bump does not need this test
+    // edited — only its column expectations extended.
+    expect(version).toBe(SCHEMA_VERSION);
   });
 
   it("denormalises user and time_class onto moves and motifs", () => {

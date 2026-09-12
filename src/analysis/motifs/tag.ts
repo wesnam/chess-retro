@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { games, moveMotifs, moves } from "@/db/schema";
 import { detectMotifs, type Motif } from "./detect";
@@ -163,6 +163,13 @@ export function tagGame(
         .onConflictDoNothing()
         .run();
     }
+
+    // Stamped inside the same transaction as the rows it describes, so a
+    // crash cannot leave a game marked tagged with nothing to show for it.
+    tx.update(games)
+      .set({ motifsTaggedAt: Date.now() })
+      .where(and(eq(games.id, gameId), eq(games.user, user)))
+      .run();
   });
 
   return tags.length;
@@ -182,7 +189,11 @@ export function tagCorpus(
   options: { retagAll?: boolean } = {},
 ): BacklogSummary {
   const candidates = db
-    .select({ id: games.id, timeClass: games.timeClass })
+    .select({
+      id: games.id,
+      timeClass: games.timeClass,
+      motifsTaggedAt: games.motifsTaggedAt,
+    })
     .from(games)
     .where(and(eq(games.user, user), eq(games.analysisStatus, "done")))
     .all();
@@ -191,19 +202,12 @@ export function tagCorpus(
   let total = 0;
 
   for (const game of candidates) {
-    if (!options.retagAll && hasTags(db, user, game.id)) continue;
+    // The marker rather than the presence of rows: a game containing no
+    // tactics at all has no rows, and would otherwise be re-detected forever.
+    if (!options.retagAll && game.motifsTaggedAt !== null) continue;
     total += tagGame(db, user, game.id, game.timeClass);
     tagged += 1;
   }
 
   return { games: tagged, tags: total };
-}
-
-function hasTags(db: Db, user: string, gameId: string): boolean {
-  const row = db
-    .select({ n: sql<number>`count(*)` })
-    .from(moveMotifs)
-    .where(and(eq(moveMotifs.gameId, gameId), eq(moveMotifs.user, user)))
-    .get();
-  return (row?.n ?? 0) > 0;
 }
