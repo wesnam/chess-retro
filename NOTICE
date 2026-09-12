@@ -1,0 +1,76 @@
+chess-retro
+Copyright (C) 2026 chess-retro contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See LICENSE for the full text.
+
+================================================================================
+Third-party components
+================================================================================
+
+The GPL-3.0 licence of this project is required by its dependencies rather than
+chosen in preference to a permissive licence. No permissively licensed chess
+engine exists.
+
+--------------------------------------------------------------------------------
+Stockfish — GPL-3.0-or-later
+https://stockfishchess.org/
+Copyright (C) The Stockfish developers
+
+Used as the analysis engine. Invoked as a separate process (native) and loaded
+as WebAssembly in the browser. Not bundled with this repository; installed
+separately by the user.
+
+--------------------------------------------------------------------------------
+chessground — GPL-3.0-or-later
+https://github.com/lichess-org/chessground
+Copyright (C) Lichess
+
+Board UI component.
+
+--------------------------------------------------------------------------------
+chess.js — BSD-2-Clause
+https://github.com/jhlywa/chess.js
+Copyright (C) Jeff Hlywa
+
+Move generation, validation and PGN parsing.
+
+--------------------------------------------------------------------------------
+Drizzle ORM — Apache-2.0
+https://github.com/drizzle-team/drizzle-orm
+
+--------------------------------------------------------------------------------
+Next.js, React, Vitest — MIT
+
+================================================================================
+Bundled data
+================================================================================
+
+The datasets below are public domain. Attribution is not required; it is given
+because knowing where the data came from matters.
+
+--------------------------------------------------------------------------------
+Lichess puzzle database — CC0 1.0 (public domain)
+https://database.lichess.org/#puzzles
+Provided by Lichess
+
+Roughly 6.1 million theme-tagged, rated puzzles. Downloaded and imported by the
+user; not redistributed in this repository.
+
+--------------------------------------------------------------------------------
+lichess-org/chess-openings — CC0 1.0 (public domain)
+https://github.com/lichess-org/chess-openings
+Provided by Lichess
+
+Opening names keyed by move sequence.
+
+================================================================================
+Derived ideas
+================================================================================
+
+The tactical motif detectors are an independent reimplementation of the
+heuristics described in lichess-puzzler's cook.py, which is AGPL-3.0 licensed.
+The ideas are reused; no code was copied. Motif identifiers deliberately match
+Lichess's theme vocabulary so that puzzle matching is a direct lookup.

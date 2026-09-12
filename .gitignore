@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Local data: database, puzzle dumps, engine binaries
+data/
+
+# Environment
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+*.swp
+
+# TypeScript build artifacts
+*.tsbuildinfo
