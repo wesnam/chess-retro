@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 CREATE TABLE IF NOT EXISTS games (
-  id                   TEXT PRIMARY KEY,
+  id                   TEXT NOT NULL,
   user                 TEXT NOT NULL,
   url                  TEXT,
   pgn                  TEXT NOT NULL,
@@ -37,14 +37,17 @@ CREATE TABLE IF NOT EXISTS games (
   analyzed_at          INTEGER,
   accuracy_user        REAL,
   cc_accuracy_user     REAL,
-  cc_accuracy_opponent REAL
+  cc_accuracy_opponent REAL,
+  -- One chess.com game is two rows when both players are tracked, one per
+  -- perspective, so the id alone is not unique.
+  PRIMARY KEY (id, user)
 );
 CREATE INDEX IF NOT EXISTS games_user_tc_end     ON games (user, time_class, end_time);
 CREATE INDEX IF NOT EXISTS games_user_status     ON games (user, analysis_status);
 CREATE INDEX IF NOT EXISTS games_user_opening    ON games (user, time_class, opening_family);
 
 CREATE TABLE IF NOT EXISTS moves (
-  game_id         TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  game_id         TEXT NOT NULL,
   ply             INTEGER NOT NULL,
   user            TEXT NOT NULL,
   time_class      TEXT NOT NULL,
@@ -67,7 +70,8 @@ CREATE TABLE IF NOT EXISTS moves (
   win_pct_after   REAL,
   move_accuracy   REAL,
   classification  TEXT,
-  PRIMARY KEY (game_id, ply)
+  PRIMARY KEY (game_id, user, ply),
+  FOREIGN KEY (game_id, user) REFERENCES games(id, user) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS moves_user_tc_usermove_class ON moves (user, time_class, is_user_move, classification);
 CREATE INDEX IF NOT EXISTS moves_user_tc_phase          ON moves (user, time_class, is_user_move, phase);
@@ -75,13 +79,14 @@ CREATE INDEX IF NOT EXISTS moves_user_tc_piece          ON moves (user, time_cla
 -- No index on (game_id, ply): the primary key already covers it.
 
 CREATE TABLE IF NOT EXISTS move_motifs (
-  game_id    TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  game_id    TEXT NOT NULL,
   ply        INTEGER NOT NULL,
   user       TEXT NOT NULL,
   time_class TEXT NOT NULL,
   motif      TEXT NOT NULL,
   role       TEXT NOT NULL,
-  PRIMARY KEY (game_id, ply, motif, role)
+  PRIMARY KEY (game_id, user, ply, motif, role),
+  FOREIGN KEY (game_id, user) REFERENCES games(id, user) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS motifs_user_tc_role_motif ON move_motifs (user, time_class, role, motif);
 

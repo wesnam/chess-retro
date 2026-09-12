@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -28,8 +29,12 @@ export const settings = sqliteTable("settings", {
 export const games = sqliteTable(
   "games",
   {
-    /** chess.com game UUID. */
-    id: text("id").primaryKey(),
+    /**
+     * chess.com game UUID. Not unique on its own: one chess.com game is two
+     * rows when both players are tracked, one per perspective. The primary key
+     * is (id, user).
+     */
+    id: text("id").notNull(),
     user: text("user").notNull(),
     url: text("url"),
     pgn: text("pgn").notNull(),
@@ -69,6 +74,7 @@ export const games = sqliteTable(
     ccAccuracyOpponent: real("cc_accuracy_opponent"),
   },
   (t) => [
+    primaryKey({ columns: [t.id, t.user] }),
     index("games_user_tc_end").on(t.user, t.timeClass, t.endTime),
     index("games_user_status").on(t.user, t.analysisStatus),
     index("games_user_opening").on(t.user, t.timeClass, t.openingFamily),
@@ -78,12 +84,11 @@ export const games = sqliteTable(
 export const moves = sqliteTable(
   "moves",
   {
-    gameId: text("game_id")
-      .notNull()
-      .references(() => games.id, { onDelete: "cascade" }),
+    gameId: text("game_id").notNull(),
     /** 1-based half-move number. */
     ply: integer("ply").notNull(),
-    // Denormalised for aggregation; see note at top of file.
+    // Part of the key rather than merely denormalised: one chess.com game is
+    // two rows when both players are tracked. See note at top of file.
     user: text("user").notNull(),
     timeClass: text("time_class").notNull(),
     /** True when this move was played by the configured user. */
@@ -122,7 +127,11 @@ export const moves = sqliteTable(
     classification: text("classification"),
   },
   (t) => [
-    primaryKey({ columns: [t.gameId, t.ply] }),
+    primaryKey({ columns: [t.gameId, t.user, t.ply] }),
+    foreignKey({
+      columns: [t.gameId, t.user],
+      foreignColumns: [games.id, games.user],
+    }).onDelete("cascade"),
     index("moves_user_tc_usermove_class").on(
       t.user,
       t.timeClass,
@@ -138,11 +147,9 @@ export const moves = sqliteTable(
 export const moveMotifs = sqliteTable(
   "move_motifs",
   {
-    gameId: text("game_id")
-      .notNull()
-      .references(() => games.id, { onDelete: "cascade" }),
+    gameId: text("game_id").notNull(),
     ply: integer("ply").notNull(),
-    // Denormalised for aggregation; see note at top of file.
+    // Part of the key rather than merely denormalised; see note at top of file.
     user: text("user").notNull(),
     timeClass: text("time_class").notNull(),
     /** Lichess theme string, e.g. "fork", "backRankMate". */
@@ -157,7 +164,11 @@ export const moveMotifs = sqliteTable(
     role: text("role").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.gameId, t.ply, t.motif, t.role] }),
+    primaryKey({ columns: [t.gameId, t.user, t.ply, t.motif, t.role] }),
+    foreignKey({
+      columns: [t.gameId, t.user],
+      foreignColumns: [games.id, games.user],
+    }).onDelete("cascade"),
     index("motifs_user_tc_role_motif").on(
       t.user,
       t.timeClass,

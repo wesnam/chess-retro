@@ -165,3 +165,110 @@ code {
   padding: 0.1rem 0.35rem;
   font-size: 0.85em;
 }
+
+/* Games list */
+
+.sync-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.sync-message {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.sync-message.error {
+  color: var(--danger);
+}
+
+.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+thead th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  white-space: nowrap;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.opening {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disc {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: baseline;
+}
+
+.disc.white {
+  background: #efe9dd;
+  border: 1px solid #8d8578;
+}
+
+.disc.black {
+  background: #26221c;
+  border: 1px solid #5a5348;
+}
+
+.result {
+  font-weight: 600;
+}
+
+.result.win {
+  color: var(--ok);
+}
+
+.result.loss {
+  color: var(--danger);
+}
+
+.result.draw {
+  color: var(--muted);
+}

@@ -92,13 +92,65 @@ describe("database creation", () => {
     seed(`INSERT INTO move_motifs (game_id, ply, user, time_class, motif, role)
           VALUES ('g1', 1, 'someone', 'blitz', 'fork', 'missed')`);
 
-    seed(`DELETE FROM games WHERE id = 'g1'`);
+    seed(`DELETE FROM games WHERE id = 'g1' AND user = 'someone'`);
 
     const count = (table: string) =>
       (db.all(`SELECT COUNT(*) AS n FROM ${table}` as never).at(0) as { n: number }).n;
 
     expect(count("moves")).toBe(0);
     expect(count("move_motifs")).toBe(0);
+  });
+
+  it("stores one chess.com game once per tracked player", () => {
+    // Both players of the same game may be tracked in one database. The
+    // chess.com id is shared, so the row identity is (id, user).
+    const db = createDb(tempDbPath());
+    const seed = (sql: string) => db.run(sql as never);
+
+    const game = (user: string, color: string, result: string) =>
+      `INSERT INTO games (id, user, pgn, time_class, user_color, user_result, end_time)
+       VALUES ('shared', '${user}', '[pgn]', 'blitz', '${color}', '${result}', 1)`;
+
+    seed(game("alice", "w", "win"));
+    expect(() => seed(game("bob", "b", "loss"))).not.toThrow();
+
+    const count = (db.all(
+      `SELECT COUNT(*) AS n FROM games WHERE id = 'shared'` as never,
+    ).at(0) as { n: number }).n;
+    expect(count).toBe(2);
+  });
+
+  it("rejects the same game stored twice for the same player", () => {
+    const db = createDb(tempDbPath());
+    const seed = (sql: string) => db.run(sql as never);
+    const game = `INSERT INTO games (id, user, pgn, time_class, user_color, user_result, end_time)
+                  VALUES ('shared', 'alice', '[pgn]', 'blitz', 'w', 'win', 1)`;
+
+    seed(game);
+    expect(() => seed(game)).toThrow();
+  });
+
+  it("deleting one player's copy leaves the other player's intact", () => {
+    const db = createDb(tempDbPath());
+    const seed = (sql: string) => db.run(sql as never);
+
+    for (const [user, color] of [
+      ["alice", "w"],
+      ["bob", "b"],
+    ]) {
+      seed(`INSERT INTO games (id, user, pgn, time_class, user_color, user_result, end_time)
+            VALUES ('shared', '${user}', '[pgn]', 'blitz', '${color}', 'win', 1)`);
+      seed(`INSERT INTO moves (game_id, ply, user, time_class, is_user_move, color,
+              fen_before, san, uci, piece)
+            VALUES ('shared', 1, '${user}', 'blitz', 1, 'w', 'fen', 'e4', 'e2e4', 'p')`);
+    }
+
+    seed(`DELETE FROM games WHERE id = 'shared' AND user = 'alice'`);
+
+    const remaining = db
+      .all(`SELECT user FROM moves` as never)
+      .map((r) => (r as { user: string }).user);
+    expect(remaining).toEqual(["bob"]);
   });
 
   it("rejects a motif row for a game that does not exist", () => {
