@@ -11,7 +11,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:slow": "vitest run --config vitest.slow.config.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

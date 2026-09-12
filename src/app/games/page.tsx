@@ -69,12 +69,15 @@ function GameTable({ rows }: { rows: GameListRow[] }) {
             <th className="num">Rating</th>
             <th>Time</th>
             <th>Opening</th>
+            <th />
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id}>
-              <td className="muted">{formatDate(row.endTime)}</td>
+              <td className="muted">
+                <Link href={`/games/${row.id}`}>{formatDate(row.endTime)}</Link>
+              </td>
               <td>
                 <span className={`disc ${row.userColor === "w" ? "white" : "black"}`} />
                 {row.userColor === "w" ? "White" : "Black"}
@@ -101,6 +104,9 @@ function GameTable({ rows }: { rows: GameListRow[] }) {
                 )}
               </td>
               <td className="muted opening">{row.openingName ?? "—"}</td>
+              <td className="muted">
+                {row.analysisStatus === "done" ? "reviewed" : ""}
+              </td>
             </tr>
           ))}
         </tbody>

@@ -1,6 +1,6 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { games } from "@/db/schema";
+import { games, moves } from "@/db/schema";
 
 export type GameListRow = {
   id: string;
@@ -50,6 +50,107 @@ export function listGames(
     .where(where)
     .orderBy(desc(games.endTime))
     .limit(limit)
+    .all();
+}
+
+export type GameDetail = {
+  id: string;
+  user: string;
+  url: string | null;
+  endTime: number;
+  timeClass: string;
+  timeControl: string | null;
+  userColor: string;
+  userResult: string;
+  userResultRaw: string | null;
+  userRating: number | null;
+  opponentUsername: string | null;
+  opponentRating: number | null;
+  openingName: string | null;
+  eco: string | null;
+  analysisStatus: string;
+  analysisError: string | null;
+  analysisDepth: number | null;
+  accuracyUser: number | null;
+  ccAccuracyUser: number | null;
+  ccAccuracyOpponent: number | null;
+};
+
+export function getGame(
+  db: Db,
+  user: string,
+  gameId: string,
+): GameDetail | undefined {
+  return db
+    .select({
+      id: games.id,
+      user: games.user,
+      url: games.url,
+      endTime: games.endTime,
+      timeClass: games.timeClass,
+      timeControl: games.timeControl,
+      userColor: games.userColor,
+      userResult: games.userResult,
+      userResultRaw: games.userResultRaw,
+      userRating: games.userRating,
+      opponentUsername: games.opponentUsername,
+      opponentRating: games.opponentRating,
+      openingName: games.openingName,
+      eco: games.eco,
+      analysisStatus: games.analysisStatus,
+      analysisError: games.analysisError,
+      analysisDepth: games.analysisDepth,
+      accuracyUser: games.accuracyUser,
+      ccAccuracyUser: games.ccAccuracyUser,
+      ccAccuracyOpponent: games.ccAccuracyOpponent,
+    })
+    .from(games)
+    .where(and(eq(games.id, gameId), eq(games.user, user)))
+    .get();
+}
+
+export type MoveRow = {
+  ply: number;
+  color: string;
+  san: string;
+  isUserMove: boolean;
+  evalBefore: number | null;
+  evalAfter: number | null;
+  mateBefore: number | null;
+  mateAfter: number | null;
+  bestMoveUci: string | null;
+  cpLoss: number | null;
+  winPctBefore: number | null;
+  winPctAfter: number | null;
+  moveAccuracy: number | null;
+  classification: string | null;
+  clockMs: number | null;
+  moveTimeMs: number | null;
+};
+
+export function listMoves(db: Db, user: string, gameId: string): MoveRow[] {
+  return db
+    .select({
+      ply: moves.ply,
+      color: moves.color,
+      san: moves.san,
+      isUserMove: moves.isUserMove,
+      evalBefore: moves.evalBefore,
+      evalAfter: moves.evalAfter,
+      mateBefore: moves.mateBefore,
+      mateAfter: moves.mateAfter,
+      bestMoveUci: moves.bestMoveUci,
+      cpLoss: moves.cpLoss,
+      winPctBefore: moves.winPctBefore,
+      winPctAfter: moves.winPctAfter,
+      moveAccuracy: moves.moveAccuracy,
+      classification: moves.classification,
+      clockMs: moves.clockMs,
+      moveTimeMs: moves.moveTimeMs,
+    })
+    .from(moves)
+    .where(and(eq(moves.gameId, gameId), eq(moves.user, user)))
+    .orderBy(moves.ply)
     .all();
 }
 
