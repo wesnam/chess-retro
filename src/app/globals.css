@@ -1,3 +1,11 @@
+/*
+ * chessground ships its own stylesheets; they must be imported for the board
+ * to have any size at all. `cburnett` is the piece set — GPL, like the board.
+ */
+@import "chessground/assets/chessground.base.css";
+@import "chessground/assets/chessground.brown.css";
+@import "chessground/assets/chessground.cburnett.css";
+
 :root {
   --bg: #14120f;
   --surface: #1e1b16;
@@ -387,4 +395,180 @@ tbody td a:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.78rem;
   opacity: 0.75;
+}
+
+/* ---------------------------------------------------------------- review */
+
+
+.review {
+  display: grid;
+  grid-template-columns: auto minmax(260px, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 1.25rem;
+}
+
+.review-board {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+/* chessground sizes itself from its container, so the container must be sized. */
+.board-wrap {
+  width: min(62vh, 460px);
+  height: min(62vh, 460px);
+}
+
+.eval-bar {
+  position: relative;
+  width: 14px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  /* Black's ground; White's share is painted over it. */
+  background: #26221c;
+}
+
+.eval-bar-white {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: #e8e2d6;
+  transition: height 140ms ease-out;
+}
+
+/* Flipped with the board, so the reviewer's own colour stays at the bottom. */
+.eval-bar[data-flipped="true"] .eval-bar-white {
+  bottom: auto;
+  top: 0;
+}
+
+.review-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.review-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.review-controls button {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.review-eval {
+  flex: 1;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.scoresheet {
+  margin: 0;
+  padding: 0.4rem;
+  list-style: none;
+  max-height: min(52vh, 380px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.scoresheet li {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr 1fr;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.move-slot {
+  display: block;
+  width: 100%;
+  padding: 0.15rem 0.35rem;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button.move-slot:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.move-slot.current {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.move-slot.mine .san {
+  font-weight: 600;
+}
+
+.eval-graph {
+  grid-column: 1 / -1;
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.eval-graph svg {
+  display: block;
+  width: 100%;
+  height: 96px;
+}
+
+.graph-ground {
+  fill: #26221c;
+}
+
+.graph-area {
+  fill: color-mix(in srgb, #e8e2d6 70%, transparent);
+}
+
+.graph-line {
+  fill: none;
+  stroke: #f3eee4;
+  stroke-width: 1.2;
+}
+
+.graph-midline {
+  stroke: var(--muted);
+  stroke-width: 0.7;
+  stroke-dasharray: 3 3;
+  opacity: 0.6;
+}
+
+.graph-mark.blunder {
+  fill: var(--danger);
+}
+
+.graph-mark.mistake {
+  fill: #d9a441;
+}
+
+.graph-cursor {
+  stroke: var(--accent);
+  stroke-width: 1.4;
+}
+
+.graph-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .review {
+    grid-template-columns: 1fr;
+  }
 }

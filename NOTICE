@@ -28,7 +28,10 @@ chessground — GPL-3.0-or-later
 https://github.com/lichess-org/chessground
 Copyright (C) Lichess
 
-Board UI component.
+Board UI component. Its bundled stylesheets are used, including the "cburnett"
+piece set — chess piece artwork originally by Colin M.L. Burnett, embedded as
+SVG in those stylesheets and redistributed by Lichess under the package's
+GPL-3.0-or-later licence.
 
 --------------------------------------------------------------------------------
 chess.js — BSD-2-Clause

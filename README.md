@@ -21,7 +21,7 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 02 | Sync chess.com games into a browsable list | ✅ done |
 | 03 | Label games with opening names | |
 | 04 | Analyse one game and show its moves | ✅ done |
-| 05 | Interactive board for a reviewed game | |
+| 05 | Interactive board for a reviewed game | ✅ done |
 | 06 | Batch-analyse the whole corpus, resumably | |
 | 07 | Tag moves with tactical motifs | |
 | 08 | **Dashboard ranking your top weaknesses** | |
@@ -118,8 +118,18 @@ different problems with different remedies. Averaging them describes a player wh
 - **A game of P plies costs P+1 evaluations, not 2P.** Each position is evaluated once and a move's
   cost is the difference between consecutive evaluations.
 - **The accuracy figures are checked against chess.com's**, which is the strongest validation
-  available: across four real games ours differ by 1.9 points on average. A sudden divergence means
-  a sign or perspective bug.
+  available: across five real games ours differ by 1.7 points on average, worst 3.0. A sudden
+  divergence means a sign or perspective bug.
+- **The board is created once and updated in place.** chessground owns its own DOM and diffs
+  internally, so `Board.tsx` mounts it in an effect with no dependencies and pushes changes through
+  `api.set()`. Re-creating it per move flickers and throws away state every step.
+- **Review logic is separated from rendering.** `review-model.ts` turns stored move rows into
+  positions, arrows and graph points, and `eval-graph.ts` turns those into coordinates. Both are
+  pure and directly tested; the components are wiring. Note SVG's y axis grows downward, so White
+  being better must give a *smaller* y.
+- **Stored rows hold the position *before* each move**, so a game of P plies yields P positions and
+  the final one has to be played out from the last row — otherwise the board can never show how the
+  game actually ended.
 - **Tests are colocated** as `*.test.ts`. Files named `*.slow.test.ts` spawn a real Stockfish binary
   and are excluded from the default run.
 - Vitest 5 prints an engine warning on odd-numbered Node releases such as 25. It runs correctly.

@@ -113,6 +113,8 @@ export type MoveRow = {
   ply: number;
   color: string;
   san: string;
+  uci: string;
+  fenBefore: string;
   isUserMove: boolean;
   evalBefore: number | null;
   evalAfter: number | null;
@@ -134,6 +136,8 @@ export function listMoves(db: Db, user: string, gameId: string): MoveRow[] {
       ply: moves.ply,
       color: moves.color,
       san: moves.san,
+      uci: moves.uci,
+      fenBefore: moves.fenBefore,
       isUserMove: moves.isUserMove,
       evalBefore: moves.evalBefore,
       evalAfter: moves.evalAfter,
