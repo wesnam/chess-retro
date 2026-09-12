@@ -7,8 +7,11 @@
  * 2 — games keyed by (id, user); moves and motifs keyed and constrained to
  *     match. One chess.com game id is shared by both players, so the old
  *     single-column key silently rejected the second player's copy.
+ * 3 — games.analysis_owner, so orphan reclaim can tell a crashed run's games
+ *     from a live run's. Added in place: unlike 2 this is a new column, and
+ *     rebuilding would throw away a corpus that takes hours to re-analyse.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Tables dropped when upgrading from a pre-version-2 database. These hold
@@ -63,6 +66,8 @@ CREATE TABLE IF NOT EXISTS games (
   analysis_error       TEXT,
   analysis_depth       INTEGER,
   analyzed_at          INTEGER,
+  -- Which run holds this game while its status is running; see schema.ts.
+  analysis_owner       TEXT,
   accuracy_user        REAL,
   cc_accuracy_user     REAL,
   cc_accuracy_opponent REAL,

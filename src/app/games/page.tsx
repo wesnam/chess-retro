@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { getUsername } from "@/settings/settings";
 import { countGames, listGames, type GameListRow } from "@/games/queries";
 import { SyncButton } from "./SyncButton";
+import { AnalyzeAllButton } from "./AnalyzeAllButton";
 
 // Reads live database state on every request.
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export default function GamesPage() {
       </p>
 
       <SyncButton />
+      {rows.length > 0 && <AnalyzeAllButton />}
 
       {rows.length === 0 ? (
         <div className="empty">

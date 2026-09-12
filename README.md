@@ -22,7 +22,7 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 03 | Label games with opening names | |
 | 04 | Analyse one game and show its moves | ✅ done |
 | 05 | Interactive board for a reviewed game | ✅ done |
-| 06 | Batch-analyse the whole corpus, resumably | |
+| 06 | Batch-analyse the whole corpus, resumably | ✅ done |
 | 07 | Tag moves with tactical motifs | |
 | 08 | **Dashboard ranking your top weaknesses** | |
 | 09 | Plain-English coaching on each weakness | |
@@ -75,8 +75,8 @@ file — back it up by copying it, reset by deleting it.
 flowchart TB
     A[chess.com public API] -->|PGN + metadata| B[ingest]
     B --> C[(SQLite: games)]
-    C --> D[AnalysisJob<br/>resumable, per-game checkpoint]
-    D --> E[EnginePool<br/>N × native Stockfish]
+    C --> D[AnalysisJob<br/>claims games by owner id<br/>one transaction per game]
+    D --> E[Engine pool<br/>cores − 1 × native Stockfish<br/>each replaced if it dies]
     E --> F[(SQLite: moves<br/>evals, classifications)]
     F --> G[Motif detectors]
     G --> H[(SQLite: move_motifs)]
@@ -104,6 +104,9 @@ different problems with different remedies. Averaging them describes a player wh
   hot reload does not open a new handle per reload.
 - **Schema** lives in two places that must be changed together: `src/db/schema.ts` (Drizzle, used for
   queries) and `src/db/migrate.ts` (DDL, applied on open). `schema.test.ts` asserts they agree.
+  Changing the shape of an existing table also needs a `SCHEMA_VERSION` bump and a step in
+  `client.ts`. Prefer `ALTER TABLE ADD COLUMN` over the drop-and-rebuild that version 2 used: an
+  analysed corpus costs hours of engine time, and rebuilding throws it away.
 - **Every game and move row carries `user`**, and `user` + `time_class` are denormalised onto move and
   motif rows. The first keeps two chess.com accounts from blending into one set of conclusions; the
   second avoids a join across tens of thousands of rows on every dashboard load.
@@ -127,6 +130,13 @@ different problems with different remedies. Averaging them describes a player wh
   positions, arrows and graph points, and `eval-graph.ts` turns those into coordinates. Both are
   pure and directly tested; the components are wiring. Note SVG's y axis grows downward, so White
   being better must give a *smaller* y.
+- **The unit of batch work is a whole game, not a position.** That keeps the engine's transposition
+  table warm across the positions of one game, and makes resumability simple: a game is either
+  entirely analysed or entirely not. Workers pull their next game from the database rather than
+  from a list split up front, so an interrupted run loses only the games actually in flight.
+- **`games.analysis_owner` says which run holds a game.** Orphan reclaim uses it to tell a crashed
+  run's abandoned games from a live run's — without it, a reclaim during a batch would hand a game
+  already being analysed to a second worker and one result would overwrite the other.
 - **Positions are indexed by ply**: position 0 is the starting position, position N is the one
   reached after ply N. The board, the evaluation bar, the scoresheet and the graph all address
   positions by that single number — keeping them on one index is what stops the board showing one

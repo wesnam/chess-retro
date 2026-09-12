@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { UciEngine, EngineError } from "./uci-engine";
+import { ResilientEngine, startPool } from "./pool";
 import { winPct } from "@/analysis/accuracy";
 
 /**
@@ -168,4 +169,48 @@ describe("a real engine", () => {
 
     await expect(uci.analyse(STARTING_FEN)).rejects.toThrow(EngineError);
   });
+});
+
+describe("a pool engine", () => {
+  let resilient: ResilientEngine | undefined;
+
+  afterEach(() => {
+    resilient?.dispose();
+    resilient = undefined;
+  });
+
+  it("keeps working after its process is killed underneath it", async () => {
+    // The property the overnight run depends on: one dead engine costs the
+    // game it was analysing, not the whole job.
+    const engine = new ResilientEngine({ depth: 8, timeoutMs: 10_000 });
+    resilient = engine;
+    await engine.start();
+
+    const before = await engine.analyse(STARTING_FEN);
+    expect(before.score).toBeDefined();
+
+    // Kill the underlying process the way a crash would.
+    (engine as unknown as { engine: UciEngine }).engine.dispose();
+
+    // The first call after the death fails and triggers the replacement.
+    await expect(engine.analyse(STARTING_FEN)).rejects.toThrow(EngineError);
+
+    // The next one works, on a fresh process.
+    const after = await engine.analyse("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1");
+    expect(after.score.kind).toBe("mate");
+  }, 40_000);
+
+  it("starts a pool of independent engines", async () => {
+    const engines = await startPool(2, { depth: 8, timeoutMs: 20_000 });
+
+    try {
+      const results = await Promise.all(
+        engines.map((engine) => engine.analyse(STARTING_FEN)),
+      );
+      expect(results).toHaveLength(2);
+      for (const result of results) expect(result.score).toBeDefined();
+    } finally {
+      for (const engine of engines) engine.dispose();
+    }
+  }, 40_000);
 });

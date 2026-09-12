@@ -62,7 +62,36 @@ function migrate(sqlite: Database.Database): void {
       }
     });
     drop();
+    // The tables are gone, so the DDL below builds them with every later
+    // column already present; nothing further to add.
+    return;
   }
+
+  // Version 3 added games.analysis_owner. Added in place rather than by
+  // rebuilding: an analysed corpus costs hours of engine time to reproduce.
+  if (existing < 3) {
+    addColumnIfMissing(sqlite, "games", "analysis_owner", "TEXT");
+  }
+}
+
+/**
+ * Add a column to an existing table, tolerating its already being there.
+ *
+ * SQLite has no `ADD COLUMN IF NOT EXISTS`, and a database part-way through an
+ * upgrade could have it already.
+ */
+function addColumnIfMissing(
+  sqlite: Database.Database,
+  table: string,
+  column: string,
+  type: string,
+): void {
+  const columns = sqlite
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as Array<{ name: string }>;
+
+  if (columns.some((c) => c.name === column)) return;
+  sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
 const DEFAULT_PATH = path.join(process.cwd(), "data", "chess-retro.db");

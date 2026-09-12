@@ -63,6 +63,13 @@ export const games = sqliteTable(
     /** Engine depth that produced this game's verdicts. */
     analysisDepth: integer("analysis_depth"),
     analyzedAt: integer("analyzed_at"),
+    /**
+     * Which run currently holds this game, set alongside `running`. Lets
+     * orphan reclaim tell a crashed run's games from a live run's: without it
+     * a reclaim during a batch would hand a game already being analysed to a
+     * second worker, and one result would overwrite the other.
+     */
+    analysisOwner: text("analysis_owner"),
     /** Our own accuracy figure for the user, from the Lichess method. */
     accuracyUser: real("accuracy_user"),
     /**

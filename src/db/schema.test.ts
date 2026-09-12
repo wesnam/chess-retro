@@ -226,6 +226,54 @@ describe("schema", () => {
     raw.close();
   });
 
+  it("carries the analysis owner, so orphan reclaim can tell runs apart", () => {
+    const file = tempDbPath();
+    createDb(file);
+    const raw = new Database(file, { readonly: true });
+    const cols = (
+      raw.prepare("PRAGMA table_info(games)").all() as { name: string }[]
+    ).map((c) => c.name);
+    raw.close();
+
+    expect(cols).toContain("analysis_owner");
+  });
+
+  it("upgrades a version-2 database without losing its games", () => {
+    // An analysed corpus costs hours of engine time, so version 3 adds its
+    // column in place. Rebuilding the table the way version 2 did would throw
+    // all of that away.
+    const file = tempDbPath();
+    createDb(file);
+
+    const seed = new Database(file);
+    seed
+      .prepare(
+        `INSERT INTO games (id, user, pgn, time_class, user_color, user_result, end_time, analysis_status)
+         VALUES ('g1', 'alice', 'pgn', 'blitz', 'w', 'win', 1700000000, 'done')`,
+      )
+      .run();
+    // Pretend this database predates the analysis_owner column.
+    seed.exec("ALTER TABLE games DROP COLUMN analysis_owner");
+    seed.pragma("user_version = 2");
+    seed.close();
+
+    createDb(file);
+
+    const raw = new Database(file, { readonly: true });
+    const cols = (
+      raw.prepare("PRAGMA table_info(games)").all() as { name: string }[]
+    ).map((c) => c.name);
+    const { n } = raw
+      .prepare("SELECT COUNT(*) AS n FROM games")
+      .get() as { n: number };
+    const version = raw.pragma("user_version", { simple: true });
+    raw.close();
+
+    expect(cols).toContain("analysis_owner");
+    expect(n, "the existing game must survive the upgrade").toBe(1);
+    expect(version).toBe(3);
+  });
+
   it("denormalises user and time_class onto moves and motifs", () => {
     const file = tempDbPath();
     createDb(file);

@@ -25,8 +25,16 @@ export async function analyseAndStore(
   db: Db,
   game: StoredGame,
   engine: Analyser,
+  options: {
+    /**
+     * Skip the claim because the caller already holds this game. The batch job
+     * claims as it pulls work from the queue; claiming twice would refuse the
+     * job's own game as already running.
+     */
+    alreadyClaimed?: boolean;
+  } = {},
 ): Promise<GameAnalysis> {
-  if (!claimGame(db, game)) {
+  if (!options.alreadyClaimed && !claimGame(db, game)) {
     throw new AlreadyRunningError(
       `Game ${game.id} is already being analysed.`,
     );
@@ -101,6 +109,9 @@ export async function analyseAndStore(
         analysisDepth: analysis.depth,
         analyzedAt: Date.now(),
         accuracyUser: analysis.accuracyUser ?? null,
+        // The run no longer holds this game; leaving a stale owner behind
+        // would misreport who was working on what.
+        analysisOwner: null,
       })
       .where(and(eq(games.id, game.id), eq(games.user, game.user)))
       .run();
