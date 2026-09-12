@@ -293,8 +293,20 @@ function MoveButton({
 
   const missed = missedMotifs[move.ply];
 
-  // Ply N is reached at position N.
-  const isCurrent = index === move.ply;
+  /**
+   * Highlight the move that is ABOUT to be played from this position, not the
+   * one that led to it.
+   *
+   * Position N-1 is where ply N is chosen, and it is where the best-move
+   * arrow and the "you missed" note for ply N are drawn (both keyed off
+   * `index + 1`). Highlighting ply `index` instead put the scoresheet cursor
+   * one move behind the arrow, so a dashboard example linking to a blunder
+   * showed the cursor on the quiet move before it.
+   *
+   * Selecting a move likewise jumps to `ply - 1`, so clicking a move in the
+   * list lands where that move's own arrow is drawn.
+   */
+  const isCurrent = index + 1 === move.ply;
 
   return (
     <button
@@ -302,7 +314,7 @@ function MoveButton({
       className={`move-slot${isCurrent ? " current" : ""}${
         move.isUserMove ? " mine" : ""
       }`}
-      onClick={() => onSelect(move.ply)}
+      onClick={() => onSelect(move.ply - 1)}
       aria-current={isCurrent ? "true" : undefined}
     >
       <span className="san">{move.san}</span>

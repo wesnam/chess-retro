@@ -3,7 +3,7 @@ import { getDb } from "@/db/client";
 import { getUsername } from "@/settings/settings";
 import { countGames } from "@/games/queries";
 import { weaknessReport, type RankedWeakness } from "@/weakness/report";
-import { MIN_OPPORTUNITIES } from "@/weakness/score";
+import { MIN_GAMES, MIN_OPPORTUNITIES } from "@/weakness/score";
 import type { WeaknessExample } from "@/weakness/queries";
 import { TimeClassFilter } from "./TimeClassFilter";
 
@@ -130,9 +130,10 @@ function NoWeaknesses({
         {report.suppressed > 0 ? (
           <>
             {report.suppressed} pattern{report.suppressed === 1 ? "" : "s"} came
-            up too few times to tell apart from chance. A weakness needs at
-            least {MIN_OPPORTUNITIES} opportunities before it is worth
-            reporting — analyse more games and they may qualify.
+            up too rarely to tell apart from chance. A weakness needs at least{" "}
+            {MIN_OPPORTUNITIES} opportunities, spread across at least{" "}
+            {MIN_GAMES} games — one bad game is an event, not a pattern.
+            Analyse more games and they may qualify.
           </>
         ) : (
           <>

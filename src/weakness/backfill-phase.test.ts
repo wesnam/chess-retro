@@ -86,13 +86,18 @@ describe("backfillPhases", () => {
     expect(backfillPhases(db, "alice")).toBe(0);
   });
 
-  it("re-labels everything when asked", () => {
-    // Improving the classifier must be able to correct existing rows.
+  it("re-labels everything when asked, correcting a wrong stored phase", () => {
+    // Improving the classifier must be able to CORRECT existing rows, not
+    // merely revisit them. Asserting the row count alone would pass even if
+    // refill rewrote the same wrong label.
     const db = tempDb();
     seed(db, [{ ply: 1, fen: START }]);
-    backfillPhases(db, "alice");
+
+    db.update(moves).set({ phase: "endgame" }).run();
+    expect(phases(db)).toEqual(["endgame"]);
 
     expect(backfillPhases(db, "alice", { refill: true })).toBe(1);
+    expect(phases(db)).toEqual(["opening"]);
   });
 
   it("leaves an unreadable position unlabelled rather than guessing", () => {

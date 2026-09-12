@@ -37,6 +37,38 @@ describe("phaseOf", () => {
     expect(phaseOf(fen)).toBe("middlegame");
   });
 
+  it("calls a double-rook endgame an endgame", () => {
+    // The most common endgame in practice. Calling it a middlegame files
+    // every error in it under the wrong phase, and the middlegame is already
+    // the top-ranked phase on the real corpus.
+    expect(phaseOf("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 30")).toBe(
+      "endgame",
+    );
+  });
+
+  it("calls a queen endgame an endgame", () => {
+    expect(phaseOf("3qk3/pppppppp/8/8/8/8/PPPPPPPP/3QK3 w - - 0 30")).toBe(
+      "endgame",
+    );
+  });
+
+  it("still calls queens-plus-rooks a middlegame", () => {
+    // The boundary in the other direction: heavy pieces all still on is not
+    // an endgame however late it is.
+    expect(phaseOf("3qk2r/pppppppp/8/8/8/8/PPPPPPPP/3QK2R w Kk - 0 30")).toBe(
+      "middlegame",
+    );
+  });
+
+  it("counts a minor as undeveloped only on its own starting square", () => {
+    // Every minor piece sits on a back rank here, but on the OPPONENT's —
+    // they are maximally developed. Testing rank membership rather than
+    // origin square would call this an opening.
+    expect(
+      phaseOf("rNbqkbNr/pppppppp/8/8/8/8/PPPPPPPP/RnBQKBnR w KQkq - 0 8"),
+    ).toBe("middlegame");
+  });
+
   it("returns undefined for a position it cannot read", () => {
     // An unreadable FEN must not silently become "opening" and skew the
     // phase dimension.

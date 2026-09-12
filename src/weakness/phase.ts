@@ -20,8 +20,17 @@ const PHASE_WEIGHTS: Record<string, number> = { n: 1, b: 1, r: 2, q: 4 };
 /** Total weight on a full board: (2 knights + 2 bishops + 2 rooks*2 + queen*4) x 2. */
 const FULL_PHASE_MATERIAL = 24;
 
-/** At or below this much remaining material the position is an endgame. */
-const ENDGAME_MATERIAL = 6;
+/**
+ * At or below this much remaining material the position is an endgame.
+ *
+ * Set so that the endgames people actually play qualify: rook-and-pawns
+ * (2+2 = 4), a queen endgame (4+4 = 8) and the very common double-rook
+ * endgame (4+4 = 8) all count. A lower bar excluded double-rook positions —
+ * the single most common endgame there is — and filed every error in one
+ * under `middlegame`, which is exactly the mislabelling this module exists to
+ * avoid. Two rooks plus a queen a side (12) is still a middlegame.
+ */
+const ENDGAME_MATERIAL = 8;
 
 /** Plies before which a position with near-full material is still the opening. */
 const OPENING_MAX_PLY = 20;
@@ -33,6 +42,16 @@ const OPENING_MAX_PLY = 20;
  * where a queen's bishop routinely sits at home long after the opening ends.
  */
 const OPENING_MIN_UNDEVELOPED = 5;
+
+/**
+ * The squares the minor pieces start on. A piece is undeveloped only when it
+ * still stands on one of these, which is not the same as standing anywhere on
+ * the back rank.
+ */
+const HOME_MINORS: Record<string, Set<string>> = {
+  w: new Set(["b1", "c1", "f1", "g1"]),
+  b: new Set(["b8", "c8", "f8", "g8"]),
+};
 
 export function phaseOf(fen: string): Phase | undefined {
   let board;
@@ -55,12 +74,13 @@ export function phaseOf(fen: string): Phase | undefined {
       if (!square) continue;
       material += PHASE_WEIGHTS[square.type] ?? 0;
 
-      // Minor pieces still sitting on their original rank: the marker that
-      // the opening is not yet finished.
-      const homeRank = square.color === "w" ? "1" : "8";
+      // Minor pieces still sitting on the square they started from: the
+      // marker that the opening is not yet finished. Origin squares, not the
+      // whole back rank — a knight that travelled to b8 is developed, not
+      // undeveloped, and rank membership cannot tell the two apart.
       if (
         (square.type === "n" || square.type === "b") &&
-        square.square.endsWith(homeRank)
+        HOME_MINORS[square.color]?.has(square.square)
       ) {
         backRankUndeveloped += 1;
       }

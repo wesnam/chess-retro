@@ -348,6 +348,86 @@ describe("dimension queries", () => {
     expect(fork?.failures).toBe(3);
   });
 
+  it("counts a ply once even when it carries the motif in two roles", () => {
+    // One ply routinely carries several motif rows, and the same motif can
+    // appear in two roles at once — nothing dedupes `missed` against
+    // `allowed`. Without DISTINCT the ply is counted twice as an
+    // opportunity, halving the apparent failure rate.
+    const db = tempDb();
+    seedGames(db, {
+      id: "g1",
+      across: 1,
+      moves: [{ ply: 1, drop: 30, motif: { motif: "fork", role: "missed" } }],
+    });
+
+    db.insert(moveMotifs)
+      .values({
+        gameId: "g1-0",
+        ply: 1,
+        user: "alice",
+        timeClass: "blitz",
+        motif: "fork",
+        role: "allowed",
+      })
+      .run();
+
+    const [fork] = motifCandidates(db, { user: "alice", timeClass: "blitz" });
+
+    // Asserting only the cost would not catch a missing DISTINCT: the cost is
+    // already guarded by the role CASE, while `opportunities` is not.
+    expect(fork?.opportunities).toBe(1);
+    expect(fork?.failures).toBe(1);
+    expect(fork?.games).toBe(1);
+    expect(fork?.winPctLost).toBeCloseTo(30, 6);
+  });
+
+  it("ignores motifs on the opponent's moves", () => {
+    // `move_motifs.user` is the corpus owner, not the mover. Without an
+    // explicit filter the opponent's blunders are counted as the player's
+    // missed tactics — and since `examplesFor` does filter, the card's
+    // numbers would not reconcile with the examples printed beneath it.
+    const db = tempDb();
+    seedGames(db, {
+      id: "g1",
+      across: 1,
+      moves: [{ ply: 1, drop: 30, motif: { motif: "fork", role: "missed" } }],
+    });
+
+    // The opponent's move, carrying the same motif at a far higher cost.
+    db.insert(moves)
+      .values({
+        gameId: "g1-0",
+        ply: 2,
+        user: "alice",
+        timeClass: "blitz",
+        isUserMove: false,
+        color: "b",
+        fenBefore: FEN,
+        san: "e5",
+        uci: "e7e5",
+        piece: "p",
+        winPctBefore: 60,
+        winPctAfter: 10,
+      })
+      .run();
+    db.insert(moveMotifs)
+      .values({
+        gameId: "g1-0",
+        ply: 2,
+        user: "alice",
+        timeClass: "blitz",
+        motif: "fork",
+        role: "missed",
+      })
+      .run();
+
+    const [fork] = motifCandidates(db, { user: "alice", timeClass: "blitz" });
+
+    expect(fork?.opportunities).toBe(1);
+    expect(fork?.failures).toBe(1);
+    expect(fork?.winPctLost).toBeCloseTo(30, 6);
+  });
+
   it("buckets time pressure by clock remaining", () => {
     const db = tempDb();
     seedGames(db, {

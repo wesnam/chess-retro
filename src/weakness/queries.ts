@@ -41,6 +41,16 @@ function analysedUserMoves({ user, timeClass }: Scope) {
  * candidates would make the comparison self-referential and put half of any
  * set below "average" by construction.
  */
+/** How many of the user's moves in this time class carry an evaluation. */
+export function countAnalysedMoves(db: Db, scope: Scope): number {
+  const row = db
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(moves)
+    .where(analysedUserMoves(scope))
+    .get();
+  return row?.n ?? 0;
+}
+
 export function corpusBaseline(db: Db, scope: Scope): number {
   const row = db
     .select({ lost: lostExpr, n: sql<number>`COUNT(*)` })
@@ -84,6 +94,13 @@ export function motifCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
       and(
         eq(moveMotifs.user, user),
         eq(moveMotifs.timeClass, timeClass),
+        // The same filter every other dimension applies, and the one
+        // `examplesFor` applies when fetching this weakness's evidence.
+        // `moveMotifs.user` is the corpus owner, not the mover, so without
+        // this the opponent's blunders would count as the player's missed
+        // tactics — and the card's numbers would not reconcile with the
+        // examples printed beneath them.
+        eq(moves.isUserMove, true),
         sql`${moves.winPctBefore} IS NOT NULL`,
         sql`${moves.winPctAfter} IS NOT NULL`,
       ),
@@ -151,14 +168,20 @@ export function phaseCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
  * the game's own starting time, and time class is already a filter.
  */
 export function timeCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
+  // Named once and referenced in both SELECT and GROUP BY. Grouping by the
+  // ordinal `1` also works, but couples the query to the key order of the
+  // object literal below: moving `bucket` down one line would silently group
+  // by COUNT(*) instead, which SQLite accepts.
+  // No NULL branch: the WHERE already excludes rows without a clock.
+  const bucketExpr = sql<string>`CASE
+    WHEN ${moves.clockMs} < 10000 THEN 'scramble'
+    WHEN ${moves.clockMs} < 30000 THEN 'low'
+    ELSE 'comfortable'
+  END`;
+
   const rows = db
     .select({
-      bucket: sql<string>`CASE
-        WHEN ${moves.clockMs} IS NULL THEN NULL
-        WHEN ${moves.clockMs} < 10000 THEN 'scramble'
-        WHEN ${moves.clockMs} < 30000 THEN 'low'
-        ELSE 'comfortable'
-      END`,
+      bucket: bucketExpr,
       opportunities: sql<number>`COUNT(*)`,
       failures: sql<number>`SUM(CASE WHEN ${moves.classification} IN ('inaccuracy','mistake','blunder') THEN 1 ELSE 0 END)`,
       games: sql<number>`COUNT(DISTINCT ${moves.gameId})`,
@@ -166,7 +189,7 @@ export function timeCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
     })
     .from(moves)
     .where(and(analysedUserMoves(scope), sql`${moves.clockMs} IS NOT NULL`))
-    .groupBy(sql`1`)
+    .groupBy(bucketExpr)
     .all();
 
   const names: Record<string, string> = {
@@ -317,7 +340,7 @@ export function examplesFor(
         and(eq(games.id, moves.gameId), eq(games.user, moves.user)),
       )
       .where(where)
-      .orderBy(sql`${moves.winPctBefore} - ${moves.winPctAfter} DESC`)
+      .orderBy(sql`MAX(0, ${moves.winPctBefore} - ${moves.winPctAfter}) DESC`)
       .limit(limit)
       .all();
 
@@ -345,7 +368,7 @@ export function examplesFor(
             eq(moveMotifs.role, "missed"),
           ),
         )
-        .orderBy(sql`${moves.winPctBefore} - ${moves.winPctAfter} DESC`)
+        .orderBy(sql`MAX(0, ${moves.winPctBefore} - ${moves.winPctAfter}) DESC`)
         .limit(limit)
         .all();
 

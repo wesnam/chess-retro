@@ -13,7 +13,7 @@ export default async function GamePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ply?: string }>;
+  searchParams: Promise<{ ply?: string | string[] }>;
 }) {
   const { id } = await params;
   const { ply } = await searchParams;
@@ -124,10 +124,15 @@ function AccuracyPanel({
  * position the player was actually looking at is the one before it — opening
  * on the ply itself would show the board after the mistake was already made.
  */
-function openingPosition(ply: string | undefined): number {
-  if (!ply) return 0;
+export function openingPosition(ply: string | string[] | undefined): number {
+  // A repeated query parameter arrives as an array, not a string.
+  if (typeof ply !== "string") return 0;
+  // Digits only. `Number` accepts far more than this guard implies — "0x10"
+  // is 16, "1e3" is 1000, " 7 " is 7 — and each would silently open the board
+  // somewhere the link never named.
+  if (!/^\d+$/.test(ply)) return 0;
   const parsed = Number(ply);
-  if (!Number.isInteger(parsed) || parsed < 1) return 0;
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return 0;
   return parsed - 1;
 }
 

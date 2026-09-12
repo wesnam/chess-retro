@@ -1,5 +1,11 @@
 import type { Db } from "@/db/client";
-import { allCandidates, corpusBaseline, examplesFor, type WeaknessExample } from "./queries";
+import {
+  allCandidates,
+  corpusBaseline,
+  countAnalysedMoves,
+  examplesFor,
+  type WeaknessExample,
+} from "./queries";
 import {
   MIN_GAMES,
   MIN_OPPORTUNITIES,
@@ -51,9 +57,11 @@ export function weaknessReport(
       (c.opportunities < MIN_OPPORTUNITIES || c.games < MIN_GAMES),
   ).length;
 
-  const analysedMoves = candidates
-    .filter((c) => c.dimension === "piece")
-    .reduce((sum, c) => sum + c.opportunities, 0);
+  // Counted directly rather than summed out of the piece dimension. That
+  // happened to give the same number — `moves.piece` is NOT NULL and the
+  // piece query adds no extra filter — but it made a headline figure depend
+  // on an unrelated query keeping no filters of its own.
+  const analysedMoves = countAnalysedMoves(db, scope);
 
   return {
     timeClass: scope.timeClass,

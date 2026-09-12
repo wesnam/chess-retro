@@ -104,14 +104,23 @@ export async function startJob(user: string): Promise<JobState> {
       // already tagged as it finishes, so this only sweeps up stragglers.
       if (progress.status !== "done") return;
 
+      // Separate blocks so the two passes are genuinely independent. Sharing
+      // one would let a tagging failure skip the phase backfill entirely,
+      // and `phaseCandidates` ignores rows with no phase — so the whole
+      // dimension would silently vanish from the dashboard.
       try {
         tagCorpus(db, user);
+      } catch {
+        // Derived data: a failure must not mark a finished analysis as
+        // failed. The next run picks the games up again.
+      }
+
+      try {
         // Phase comes from the position, so it costs no engine time and can
         // be filled in over rows that already exist.
         backfillPhases(db, user);
       } catch {
-        // Both are derived data: a failure here must not mark a finished
-        // analysis as failed. The next run picks the games up again.
+        // As above.
       }
     })
     .catch(() => {
