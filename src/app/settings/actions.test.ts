@@ -76,12 +76,50 @@ describe("saving settings", () => {
     expect(getUsername(db)).toBeUndefined();
   });
 
-  it("falls back to the default when the limit is not a number", async () => {
-    await saveSettings(
+  it("rejects a limit that is not a number", async () => {
+    const result = await saveSettings(
       { status: "idle" },
       formData({ username: "hikaru", corpusLimit: "banana" }),
     );
+    expect(result.status).toBe("error");
+  });
+
+  it("uses the default when the limit is left blank", async () => {
+    await saveSettings(
+      { status: "idle" },
+      formData({ username: "hikaru", corpusLimit: "" }),
+    );
     expect(getCorpusLimit(db)).toBe(500);
+  });
+
+  it("saves nothing at all when the limit is rejected", async () => {
+    // A save that reports failure must not leave the app configured: the
+    // person would believe nothing happened while the username was stored.
+    const result = await saveSettings(
+      { status: "idle" },
+      formData({ username: "hikaru", corpusLimit: "0" }),
+    );
+
+    expect(result.status).toBe("error");
+    expect(getUsername(db)).toBeUndefined();
+  });
+
+  it("honours an exponent-formatted limit rather than truncating it", async () => {
+    // A number input can legitimately submit "1e4"; parseInt would read 1.
+    await saveSettings(
+      { status: "idle" },
+      formData({ username: "hikaru", corpusLimit: "1e4" }),
+    );
+    expect(getCorpusLimit(db)).toBe(10_000);
+  });
+
+  it("does not accept a limit with trailing garbage", async () => {
+    const result = await saveSettings(
+      { status: "idle" },
+      formData({ username: "hikaru", corpusLimit: "12abc" }),
+    );
+    expect(result.status).toBe("error");
+    expect(getUsername(db)).toBeUndefined();
   });
 
   it("changing the username replaces it rather than keeping both", async () => {

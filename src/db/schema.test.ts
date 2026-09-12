@@ -57,7 +57,7 @@ describe("database creation", () => {
     expect(fs.existsSync(file)).toBe(true);
   });
 
-  it("enables WAL and foreign keys", () => {
+  it("enables WAL, so the dashboard can read while a job writes", () => {
     const file = tempDbPath();
     createDb(file);
 
@@ -74,6 +74,39 @@ describe("database creation", () => {
         `INSERT INTO moves (game_id, ply, user, time_class, is_user_move, color,
            fen_before, san, uci, piece)
          VALUES ('nope', 1, 'someone', 'blitz', 1, 'w', 'fen', 'e4', 'e2e4', 'p')` as never,
+      ),
+    ).toThrow();
+  });
+
+  it("removes a game's moves and motifs along with the game", () => {
+    // Motif rows that outlive their game would quietly inflate the weakness
+    // counts on the dashboard, which is the whole point of the project.
+    const db = createDb(tempDbPath());
+    const seed = (sql: string) => db.run(sql as never);
+
+    seed(`INSERT INTO games (id, user, pgn, time_class, user_color, user_result, end_time)
+          VALUES ('g1', 'someone', '[pgn]', 'blitz', 'w', 'win', 1)`);
+    seed(`INSERT INTO moves (game_id, ply, user, time_class, is_user_move, color,
+            fen_before, san, uci, piece)
+          VALUES ('g1', 1, 'someone', 'blitz', 1, 'w', 'fen', 'e4', 'e2e4', 'p')`);
+    seed(`INSERT INTO move_motifs (game_id, ply, user, time_class, motif, role)
+          VALUES ('g1', 1, 'someone', 'blitz', 'fork', 'missed')`);
+
+    seed(`DELETE FROM games WHERE id = 'g1'`);
+
+    const count = (table: string) =>
+      (db.all(`SELECT COUNT(*) AS n FROM ${table}` as never).at(0) as { n: number }).n;
+
+    expect(count("moves")).toBe(0);
+    expect(count("move_motifs")).toBe(0);
+  });
+
+  it("rejects a motif row for a game that does not exist", () => {
+    const db = createDb(tempDbPath());
+    expect(() =>
+      db.run(
+        `INSERT INTO move_motifs (game_id, ply, user, time_class, motif, role)
+         VALUES ('nope', 1, 'someone', 'blitz', 'fork', 'missed')` as never,
       ),
     ).toThrow();
   });

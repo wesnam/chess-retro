@@ -9,6 +9,7 @@ import {
   getUsername,
   isValidUsername,
   normalizeUsername,
+  saveUsernameAndLimit,
   setCorpusLimit,
   setUsername,
 } from "./settings";
@@ -92,6 +93,32 @@ describe("username normalisation", () => {
   });
 });
 
+describe("saving username and limit together", () => {
+  it("stores both", () => {
+    saveUsernameAndLimit(db, "hikaru", 750);
+    expect(getUsername(db)).toBe("hikaru");
+    expect(getCorpusLimit(db)).toBe(750);
+  });
+
+  it("stores neither when the limit is rejected", () => {
+    expect(() => saveUsernameAndLimit(db, "hikaru", 0)).toThrow();
+    expect(getUsername(db)).toBeUndefined();
+  });
+
+  it("stores neither when the username is rejected", () => {
+    expect(() => saveUsernameAndLimit(db, "no", 750)).toThrow();
+    expect(getCorpusLimit(db)).toBe(DEFAULT_CORPUS_LIMIT);
+  });
+
+  it("leaves an earlier good value intact when a later save fails", () => {
+    saveUsernameAndLimit(db, "hikaru", 750);
+    expect(() => saveUsernameAndLimit(db, "magnuscarlsen", -1)).toThrow();
+
+    expect(getUsername(db)).toBe("hikaru");
+    expect(getCorpusLimit(db)).toBe(750);
+  });
+});
+
 describe("corpus limit", () => {
   it("defaults to roughly a year of games", () => {
     expect(getCorpusLimit(db)).toBe(DEFAULT_CORPUS_LIMIT);
@@ -112,11 +139,29 @@ describe("corpus limit", () => {
     expect(() => setCorpusLimit(db, -5)).toThrow();
   });
 
-  it("falls back to the default if the stored value is corrupt", () => {
+  it.each([
+    ["banana", "no digits at all"],
+    ["12abc", "a numeric prefix, which parseInt would wrongly accept"],
+    ["", "an empty string"],
+    ["-5", "a negative number"],
+    ["0", "zero"],
+    ["NaN", "the literal NaN"],
+  ])(
+    "falls back to the default when the stored value is %j (%s)",
+    (stored) => {
+      db.run(
+        `INSERT INTO settings (key, value, updated_at)
+         VALUES ('corpus.limit', '${stored}', 1)` as never,
+      );
+      expect(getCorpusLimit(db)).toBe(DEFAULT_CORPUS_LIMIT);
+    },
+  );
+
+  it("reads a stored exponent-formatted limit at full value", () => {
     db.run(
       `INSERT INTO settings (key, value, updated_at)
-       VALUES ('corpus.limit', 'banana', 1)` as never,
+       VALUES ('corpus.limit', '1e4', 1)` as never,
     );
-    expect(getCorpusLimit(db)).toBe(DEFAULT_CORPUS_LIMIT);
+    expect(getCorpusLimit(db)).toBe(10_000);
   });
 });

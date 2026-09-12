@@ -131,14 +131,16 @@ export const moves = sqliteTable(
     ),
     index("moves_user_tc_phase").on(t.user, t.timeClass, t.isUserMove, t.phase),
     index("moves_user_tc_piece").on(t.user, t.timeClass, t.isUserMove, t.piece),
-    index("moves_game_ply").on(t.gameId, t.ply),
+    // No index on (game_id, ply): the primary key already covers it.
   ],
 );
 
 export const moveMotifs = sqliteTable(
   "move_motifs",
   {
-    gameId: text("game_id").notNull(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id, { onDelete: "cascade" }),
     ply: integer("ply").notNull(),
     // Denormalised for aggregation; see note at top of file.
     user: text("user").notNull(),

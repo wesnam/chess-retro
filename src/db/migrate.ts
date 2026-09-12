@@ -72,10 +72,10 @@ CREATE TABLE IF NOT EXISTS moves (
 CREATE INDEX IF NOT EXISTS moves_user_tc_usermove_class ON moves (user, time_class, is_user_move, classification);
 CREATE INDEX IF NOT EXISTS moves_user_tc_phase          ON moves (user, time_class, is_user_move, phase);
 CREATE INDEX IF NOT EXISTS moves_user_tc_piece          ON moves (user, time_class, is_user_move, piece);
-CREATE INDEX IF NOT EXISTS moves_game_ply               ON moves (game_id, ply);
+-- No index on (game_id, ply): the primary key already covers it.
 
 CREATE TABLE IF NOT EXISTS move_motifs (
-  game_id    TEXT NOT NULL,
+  game_id    TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   ply        INTEGER NOT NULL,
   user       TEXT NOT NULL,
   time_class TEXT NOT NULL,
