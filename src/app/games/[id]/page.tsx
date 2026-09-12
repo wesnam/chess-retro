@@ -10,10 +10,13 @@ export const dynamic = "force-dynamic";
 
 export default async function GamePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ ply?: string }>;
 }) {
   const { id } = await params;
+  const { ply } = await searchParams;
   const db = getDb();
   const username = getUsername(db);
   if (!username) notFound();
@@ -62,6 +65,7 @@ export default async function GamePage({
           userColor={game.userColor}
           analysed={analysed}
           missedMotifs={Object.fromEntries(missedMotifs)}
+          initialIndex={openingPosition(ply)}
         />
       )}
 
@@ -111,6 +115,20 @@ function AccuracyPanel({
       </div>
     </div>
   );
+}
+
+/**
+ * Which board position a `?ply=` link should open on.
+ *
+ * A dashboard example names the PLY of the move that went wrong, and the
+ * position the player was actually looking at is the one before it — opening
+ * on the ply itself would show the board after the mistake was already made.
+ */
+function openingPosition(ply: string | undefined): number {
+  if (!ply) return 0;
+  const parsed = Number(ply);
+  if (!Number.isInteger(parsed) || parsed < 1) return 0;
+  return parsed - 1;
 }
 
 function resultLabel(result: string): string {

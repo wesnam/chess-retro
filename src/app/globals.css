@@ -636,3 +636,139 @@ button.move-slot:hover {
   color: var(--danger);
   vertical-align: middle;
 }
+
+/* --- Dashboard: ranked weaknesses --- */
+
+.tc-filter {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.25rem 0 1.5rem;
+  flex-wrap: wrap;
+}
+
+.tc-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-transform: capitalize;
+}
+
+.tc-option:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.tc-option.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.tc-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+  font-size: 0.8em;
+}
+
+.weakness-list {
+  list-style: none;
+  counter-reset: weakness;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.weakness-list > li {
+  counter-increment: weakness;
+}
+
+.weakness-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.weakness-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.weakness-head h2::before {
+  content: counter(weakness) ". ";
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.dimension {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+}
+
+.weakness-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.weakness-stats .figure dt,
+.weakness-stats .figure dd {
+  margin: 0;
+}
+
+.weakness-examples h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.weakness-examples ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.example {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.example:hover {
+  border-color: var(--accent);
+}
+
+.example-move {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-weight: 600;
+}
+
+.example-cost {
+  font-variant-numeric: tabular-nums;
+  color: var(--loss, #c0392b);
+}

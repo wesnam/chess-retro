@@ -2,6 +2,7 @@ import { getDb } from "@/db/client";
 import { poolSize, startPool, type ResilientEngine } from "@/engine/pool";
 import { AnalysisJob, countPending, reclaimOrphanedGames, type Progress } from "./batch";
 import { tagCorpus } from "./motifs/tag";
+import { backfillPhases } from "@/weakness/backfill-phase";
 
 /**
  * The one batch job for this server.
@@ -105,8 +106,11 @@ export async function startJob(user: string): Promise<JobState> {
 
       try {
         tagCorpus(db, user);
+        // Phase comes from the position, so it costs no engine time and can
+        // be filled in over rows that already exist.
+        backfillPhases(db, user);
       } catch {
-        // Tags are derived data: a failure here must not mark a finished
+        // Both are derived data: a failure here must not mark a finished
         // analysis as failed. The next run picks the games up again.
       }
     })

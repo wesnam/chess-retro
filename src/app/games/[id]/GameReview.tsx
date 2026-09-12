@@ -20,12 +20,18 @@ export function GameReview({
   userColor,
   analysed,
   missedMotifs = {},
+  initialIndex = 0,
 }: {
   moves: MoveRow[];
   userColor: string;
   analysed: boolean;
   /** Tactics the player missed, keyed by ply. */
   missedMotifs?: Record<number, string[]>;
+  /**
+   * Position to open on, so a dashboard example can link straight to the move
+   * it is evidence for.
+   */
+  initialIndex?: number;
 }) {
   const review = useMemo(
     () => buildReview({ moves, userColor }),
@@ -33,7 +39,9 @@ export function GameReview({
   );
 
   // Position 0 is the starting position; position N is after ply N.
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() =>
+    Math.min(Math.max(0, initialIndex), review.lastPositionIndex),
+  );
   const lastPosition = review.lastPositionIndex;
 
   const step = useCallback(
