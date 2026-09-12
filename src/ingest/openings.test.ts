@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { sql } from "drizzle-orm";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,11 +7,13 @@ import { createDb, type Db } from "@/db/client";
 import { games, openings } from "@/db/schema";
 import {
   familyOf,
+  gamePositionKeys,
   importOpenings,
+  lineEndPosition,
   loadOpeningLines,
   matchOpening,
   parseOpeningTsv,
-  uciPrefixOf,
+  positionKey,
   labelGames,
 } from "./openings";
 
@@ -59,24 +62,49 @@ describe("familyOf", () => {
   });
 });
 
-describe("uciPrefixOf", () => {
-  it("converts a SAN line into a UCI move sequence", () => {
-    expect(uciPrefixOf("1. e4 c5 2. Nf3")).toBe("e2e4 c7c5 g1f3");
+describe("positionKey", () => {
+  it("drops the move counters so a position matches however it was reached", () => {
+    // The halfmove clock and fullmove number differ between two routes to the
+    // same position; keeping them would defeat the whole point.
+    const a = "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3";
+    const b = "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 2 7";
+    expect(positionKey(a)).toBe(positionKey(b));
+  });
+
+  it("keeps castling rights and the en-passant square", () => {
+    // Two positions with the same pieces but different rights are genuinely
+    // different positions and must not collapse together.
+    const withRights = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    const without = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1";
+    expect(positionKey(withRights)).not.toBe(positionKey(without));
+  });
+});
+
+describe("lineEndPosition", () => {
+  it("returns the position a SAN line reaches, and its length", () => {
+    const result = lineEndPosition("1. e4 c5 2. Nf3");
+    expect(result?.plyCount).toBe(3);
+    expect(result?.key).toContain(" b "); // Black to move after three plies.
+  });
+
+  it("gives the same key for two move orders reaching one position", () => {
+    // The behaviour the whole matcher rests on.
+    const direct = lineEndPosition("1. e4 e6 2. d4 d5");
+    const transposed = lineEndPosition("1. d4 e6 2. e4 d5");
+    expect(direct?.key).toBe(transposed?.key);
   });
 
   it("handles a line with no move numbers", () => {
-    expect(uciPrefixOf("e4 e5")).toBe("e2e4 e7e5");
+    expect(lineEndPosition("e4 e5")?.plyCount).toBe(2);
   });
 
   it("returns undefined for a line it cannot replay", () => {
     // A malformed row must not become an opening keyed on nonsense.
-    expect(uciPrefixOf("1. e4 Qxz9")).toBeUndefined();
+    expect(lineEndPosition("1. e4 Qxz9")).toBeUndefined();
   });
 
-  it("encodes a promotion", () => {
-    // The suffix matters: without it two different promotions share a key.
-    const line = "1. a4 b5 2. axb5 Nf6 3. b6 Ng8 4. bxa7 Nf6 5. axb8=Q";
-    expect(uciPrefixOf(line)?.endsWith("a7b8q")).toBe(true);
+  it("returns undefined for an empty line", () => {
+    expect(lineEndPosition("")).toBeUndefined();
   });
 });
 
@@ -94,10 +122,10 @@ describe("parseOpeningTsv", () => {
     expect(rows[0]).toMatchObject({ eco: "B20", name: "Sicilian Defense" });
   });
 
-  it("derives the uci prefix, family and ply count", () => {
+  it("derives the position key, family and ply count", () => {
     const [, closed] = parseOpeningTsv(TSV);
     expect(closed).toMatchObject({
-      uciPrefix: "e2e4 c7c5 b1c3",
+      uciPrefix: lineEndPosition("1. e4 c5 2. Nc3")!.key,
       family: "Sicilian Defense",
       plyCount: 3,
     });
@@ -115,43 +143,74 @@ describe("parseOpeningTsv", () => {
 });
 
 describe("matchOpening", () => {
-  const LINES = [
-    { uciPrefix: "e2e4 c7c5", eco: "B20", name: "Sicilian Defense", family: "Sicilian Defense", plyCount: 2 },
-    { uciPrefix: "e2e4 c7c5 b1c3", eco: "B23", name: "Sicilian Defense: Closed", family: "Sicilian Defense", plyCount: 3 },
-    { uciPrefix: "e2e4 e7e5", eco: "C20", name: "King's Pawn Game", family: "King's Pawn Game", plyCount: 2 },
-  ];
+  /** Build an index the way the importer does, from SAN lines. */
+  function indexOf(entries: [san: string, eco: string, name: string][]) {
+    const index = new Map<string, ReturnType<typeof parseOpeningTsv>[number]>();
+    for (const [san, eco, name] of entries) {
+      const position = lineEndPosition(san)!;
+      index.set(position.key, {
+        uciPrefix: position.key,
+        eco,
+        name,
+        family: familyOf(name),
+        plyCount: position.plyCount,
+      });
+    }
+    return index;
+  }
 
-  const index = new Map(LINES.map((l) => [l.uciPrefix, l]));
+  const index = indexOf([
+    // A one-ply line, so "merely shares a first move" is a real possibility
+    // that the matcher has to reject on its own merits.
+    ["1. e4", "B00", "King's Pawn Opening"],
+    ["1. e4 c5", "B20", "Sicilian Defense"],
+    ["1. e4 c5 2. Nc3", "B23", "Sicilian Defense: Closed"],
+    ["1. e4 e5", "C20", "King's Pawn Game"],
+    ["1. e4 e6 2. d4 d5", "C00", "French Defense"],
+  ]);
 
-  it("picks the longest matching prefix, not the first", () => {
-    // The deepest match wins — otherwise every Sicilian is just "Sicilian
-    // Defense" and the variation is thrown away.
-    const match = matchOpening(["e2e4", "c7c5", "b1c3", "d7d6"], index);
+  const keys = (pgn: string) => gamePositionKeys(pgn)!;
+
+  it("picks the deepest matching line, not the first", () => {
+    // Otherwise every Sicilian is just "Sicilian Defense" and the variation
+    // is thrown away.
+    const match = matchOpening(keys("1. e4 c5 2. Nc3 d6"), index);
     expect(match?.name).toBe("Sicilian Defense: Closed");
   });
 
-  it("falls back to the shorter line when the deep one does not match", () => {
-    const match = matchOpening(["e2e4", "c7c5", "g1f3"], index);
+  it("falls back to the shallower line when the deep one does not match", () => {
+    const match = matchOpening(keys("1. e4 c5 2. Nf3"), index);
     expect(match?.name).toBe("Sicilian Defense");
   });
 
-  it("does not match a line that merely shares a first move", () => {
-    // A shorter line is a false match unless it is a genuine PREFIX. 1.e4 e5
-    // must never be labelled a Sicilian just because both start 1.e4.
-    const match = matchOpening(["e2e4", "e7e5"], index);
-    expect(match?.name).toBe("King's Pawn Game");
+  it("does not take a shallower line when a deeper one fits", () => {
+    // The false-match case the ticket asks for. "1. e4" IS in the index and
+    // every one of these games passes through it, so a matcher that stopped
+    // at the first hit would label all of them "King's Pawn Opening".
+    expect(matchOpening(keys("1. e4 e5"), index)?.name).toBe("King's Pawn Game");
+    expect(matchOpening(keys("1. e4 c5"), index)?.name).toBe("Sicilian Defense");
+  });
+
+  it("recognises a line reached by transposition", () => {
+    // The defect this matcher exists to avoid. A French Defense played
+    // 1.d4 e6 2.e4 d5 shares no move prefix with 1.e4 e6 2.d4 d5, and keying
+    // on moves labelled it "Horwitz Defense" — a different opening entirely.
+    const transposed = matchOpening(keys("1. d4 e6 2. e4 d5"), index);
+    expect(transposed?.name).toBe("French Defense");
+  });
+
+  it("still matches the direct move order", () => {
+    expect(matchOpening(keys("1. e4 e6 2. d4 d5"), index)?.name).toBe(
+      "French Defense",
+    );
   });
 
   it("returns undefined when nothing matches", () => {
-    expect(matchOpening(["d2d4", "d7d5"], index)).toBeUndefined();
+    expect(matchOpening(keys("1. d4 d5"), index)).toBeUndefined();
   });
 
   it("returns undefined for a game with no moves", () => {
     expect(matchOpening([], index)).toBeUndefined();
-  });
-
-  it("matches a game shorter than the deepest known line", () => {
-    expect(matchOpening(["e2e4", "c7c5"], index)?.name).toBe("Sicilian Defense");
   });
 });
 
@@ -173,6 +232,43 @@ describe("importOpenings", () => {
 
     expect(second).toBe(first);
     expect(db.select().from(openings).all().length).toBe(first);
+  });
+
+  it("skips the work entirely once the table is complete", () => {
+    // Parsing replays 3,800 SAN lines through chess.js, about a second. Paid
+    // on every boot for a table that has not changed, that is a second of
+    // startup for nothing.
+    const db = tempDb();
+    importOpenings(db);
+
+    const started = Date.now();
+    importOpenings(db);
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+
+  it("re-imports when the stored table is incomplete", () => {
+    // Skipping on "some rows exist" would leave a half-finished import in
+    // place forever — a crash mid-transaction must be recoverable.
+    const db = tempDb();
+    const full = importOpenings(db);
+
+    db.delete(openings).where(sql`rowid % 2 = 0`).run();
+    const remaining = db.select().from(openings).all().length;
+    expect(remaining).toBeLessThan(full);
+
+    expect(importOpenings(db)).toBe(full);
+    expect(db.select().from(openings).all().length).toBe(full);
+  });
+
+  it("re-imports on request even when complete", () => {
+    const db = tempDb();
+    importOpenings(db);
+    db.update(openings).set({ name: "wrong" }).run();
+
+    importOpenings(db, { force: true });
+
+    const names = db.select().from(openings).all().map((r) => r.name);
+    expect(names.every((n) => n === "wrong")).toBe(false);
   });
 
   it("stores the family alongside the full name", () => {
@@ -287,6 +383,13 @@ describe("labelGames", () => {
   });
 });
 
+/**
+ * Measured from the vendored dataset. Asserted exactly so a parser change
+ * that silently drops rows fails rather than passing a loose bound.
+ */
+const BUNDLED_LINE_COUNT = 3810;
+const BUNDLED_FAMILY_COUNT = 149;
+
 describe("the bundled dataset", () => {
   it("groups thousands of lines into a usable number of families", () => {
     // The whole point for the weakness dashboard: per-variation groups are
@@ -295,8 +398,11 @@ describe("the bundled dataset", () => {
     const lines = loadOpeningLines();
     const families = new Set(lines.map((l) => l.family));
 
-    expect(lines.length).toBeGreaterThan(3000);
-    expect(families.size).toBeLessThan(400);
+    // Exact, not a loose floor: every one of the bundled rows parses, so any
+    // row silently dropped by a parser change is a regression. A `> 3000`
+    // bound would let 800 disappear unnoticed.
+    expect(lines.length).toBe(BUNDLED_LINE_COUNT);
+    expect(families.size).toBe(BUNDLED_FAMILY_COUNT);
     expect(families.has("Sicilian Defense")).toBe(true);
   });
 

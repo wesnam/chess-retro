@@ -19,12 +19,35 @@ import { games, openings } from "@/db/schema";
  */
 
 export type OpeningLine = {
+  /**
+   * The POSITION this line reaches, as the first four FEN fields — pieces,
+   * side to move, castling rights and the en-passant square. The move counters
+   * are dropped so the same position reached in a different number of moves
+   * still matches.
+   *
+   * Stored in the `uci_prefix` column, which is the key the schema already
+   * provides. Keying on the move sequence instead is what makes a
+   * transposition unmatchable: a French Defense played 1.d4 e6 2.e4 d5 shares
+   * no prefix with 1.e4 e6 2.d4 d5, and the walk bottoms out on a shallow
+   * unrelated line. On the real corpus that mislabelled half the games,
+   * including a French reported as a Horwitz Defense.
+   */
   uciPrefix: string;
   eco: string;
   name: string;
   family: string;
   plyCount: number;
 };
+
+/**
+ * A position key: the FEN without its move counters.
+ *
+ * Openings are defined by the position reached, not the order of moves that
+ * reached it, so this is what both sides of the match are keyed on.
+ */
+export function positionKey(fen: string): string {
+  return fen.split(" ").slice(0, 4).join(" ");
+}
 
 /** The part of a name before the first colon, e.g. "Sicilian Defense". */
 export function familyOf(name: string): string {
@@ -33,12 +56,14 @@ export function familyOf(name: string): string {
 }
 
 /**
- * Replay a SAN line into a space-separated UCI move sequence.
+ * Replay a SAN line and return the position it reaches, plus its length.
  *
- * The dataset stores SAN, but games are matched on UCI — SAN is ambiguous
- * without the position, so it cannot be compared move-for-move.
+ * The dataset stores SAN, which is meaningless without a board, so every line
+ * is replayed once at import and stored as the position it arrives at.
  */
-export function uciPrefixOf(sanLine: string): string | undefined {
+export function lineEndPosition(
+  sanLine: string,
+): { key: string; plyCount: number } | undefined {
   const chess = new Chess();
   try {
     // chess.js accepts a bare movetext, move numbers included.
@@ -47,12 +72,10 @@ export function uciPrefixOf(sanLine: string): string | undefined {
     return undefined;
   }
 
-  const history = chess.history({ verbose: true });
-  if (history.length === 0) return undefined;
+  const plyCount = chess.history().length;
+  if (plyCount === 0) return undefined;
 
-  return history
-    .map((move) => `${move.from}${move.to}${move.promotion ?? ""}`)
-    .join(" ");
+  return { key: positionKey(chess.fen()), plyCount };
 }
 
 /** Parse one TSV file of the dataset. */
@@ -66,25 +89,37 @@ export function parseOpeningTsv(tsv: string): OpeningLine[] {
     // The header, and any row missing a column.
     if (!eco || !name || !pgn || eco === "eco") continue;
 
-    const uciPrefix = uciPrefixOf(pgn);
+    const position = lineEndPosition(pgn);
     // A line we cannot replay would become an opening keyed on nothing.
-    if (!uciPrefix) continue;
+    if (!position) continue;
 
     lines.push({
-      uciPrefix,
+      uciPrefix: position.key,
       eco,
       name,
       family: familyOf(name),
-      plyCount: uciPrefix.split(" ").length,
+      plyCount: position.plyCount,
     });
   }
 
   return lines;
 }
 
-/** Where the vendored dataset lives, relative to this module. */
-const DATA_DIR = path.join(process.cwd(), "src", "ingest", "openings-data");
 const DATA_FILES = ["a.tsv", "b.tsv", "c.tsv", "d.tsv", "e.tsv"];
+
+/**
+ * Where the vendored dataset lives.
+ *
+ * A static `process.cwd()` path on purpose. Resolving against the module's own
+ * location would be more robust to being started from another directory, but
+ * Turbopack refuses to statically analyse it — a computed path here makes it
+ * trace the entire project into the server bundle, and the build then fails.
+ *
+ * The app already requires being started from the package root: `db/client.ts`
+ * resolves `data/chess-retro.db` the same way, so a different cwd has no
+ * database either. If that ever changes, this must change with it.
+ */
+const DATA_DIR = path.join(process.cwd(), "src", "ingest", "openings-data");
 
 /**
  * Read every bundled TSV.
@@ -94,21 +129,69 @@ const DATA_FILES = ["a.tsv", "b.tsv", "c.tsv", "d.tsv", "e.tsv"];
  */
 export function loadOpeningLines(): OpeningLine[] {
   const lines: OpeningLine[] = [];
+  const missing: string[] = [];
+
+  for (const file of DATA_FILES) {
+    const full = path.join(DATA_DIR, file);
+    if (!fs.existsSync(full)) {
+      missing.push(file);
+      continue;
+    }
+    lines.push(...parseOpeningTsv(fs.readFileSync(full, "utf8")));
+  }
+
+  // Loudly, because the alternative is an app that boots looking healthy with
+  // every game permanently unlabelled and nothing anywhere saying why. The
+  // path is resolved from the working directory, so this fires when the
+  // server was started from somewhere other than the package root.
+  if (missing.length > 0) {
+    console.warn(
+      `[chess-retro] opening dataset incomplete: ${missing.length} of ${DATA_FILES.length} files missing from ${DATA_DIR}. Games will not be labelled with opening names.`,
+    );
+  }
+
+  return lines;
+}
+
+/**
+ * How many rows the bundled dataset holds, checked before doing the work.
+ *
+ * Parsing means replaying 3,800 SAN lines through chess.js, which costs about
+ * a second — paid on every boot for a table that has not changed since the
+ * last one. Comparing the stored count against the file count is free and
+ * skips all of it.
+ */
+function bundledLineCount(): number {
+  let count = 0;
   for (const file of DATA_FILES) {
     const full = path.join(DATA_DIR, file);
     if (!fs.existsSync(full)) continue;
-    lines.push(...parseOpeningTsv(fs.readFileSync(full, "utf8")));
+    for (const row of fs.readFileSync(full, "utf8").split("\n")) {
+      if (row.trim() === "" || row.startsWith("eco\t")) continue;
+      count += 1;
+    }
   }
-  return lines;
+  return count;
 }
 
 /**
  * Load the dataset into the database.
  *
  * Idempotent: rows are keyed by their UCI prefix, so re-running replaces
- * rather than duplicates.
+ * rather than duplicates. Skipped entirely when the table already holds every
+ * bundled line, which is the case on every boot after the first.
  */
-export function importOpenings(db: Db): number {
+export function importOpenings(db: Db, options: { force?: boolean } = {}): number {
+  if (!options.force) {
+    const stored = db
+      .select({ n: sql<number>`COUNT(*)` })
+      .from(openings)
+      .get()?.n ?? 0;
+    // Only skip on an exact match: a partial import, or a dataset that grew
+    // since the last run, must still be applied.
+    if (stored > 0 && stored === bundledLineCount()) return stored;
+  }
+
   const lines = loadOpeningLines();
 
   db.transaction((tx) => {
@@ -148,20 +231,21 @@ export function openingIndex(db: Db): Map<string, OpeningLine> {
 }
 
 /**
- * The deepest known line that prefixes these moves.
+ * The deepest known opening among the positions a game passed through.
  *
- * Walks from the longest candidate down rather than scanning every line: the
- * index is keyed on the exact prefix string, so this is a handful of map
- * lookups instead of 3,800 comparisons per game.
+ * Takes the positions in order and walks back from the last, so the deepest
+ * named position wins — the variation, not the generic line above it. Because
+ * the key is the position rather than the moves that reached it, a game that
+ * transposes into a line is still recognised as that line.
  */
 export function matchOpening(
-  uciMoves: string[],
+  positionKeys: string[],
   index: Map<string, OpeningLine>,
 ): OpeningLine | undefined {
-  const limit = Math.min(uciMoves.length, MAX_OPENING_PLIES);
+  const limit = Math.min(positionKeys.length, MAX_OPENING_PLIES);
 
-  for (let length = limit; length > 0; length -= 1) {
-    const candidate = index.get(uciMoves.slice(0, length).join(" "));
+  for (let i = limit - 1; i >= 0; i -= 1) {
+    const candidate = index.get(positionKeys[i]!);
     if (candidate) return candidate;
   }
 
@@ -174,8 +258,13 @@ export function matchOpening(
  */
 const MAX_OPENING_PLIES = 40;
 
-/** The UCI moves of a stored game, or undefined if its PGN cannot be read. */
-function uciMovesOf(pgn: string): string[] | undefined {
+/**
+ * The positions a game passed through, in order, as position keys.
+ *
+ * One per ply played, capped at the opening phase — the position AFTER each
+ * move, which is what the dataset's lines are keyed on.
+ */
+export function gamePositionKeys(pgn: string): string[] | undefined {
   const chess = new Chess();
   try {
     chess.loadPgn(pgn);
@@ -183,10 +272,12 @@ function uciMovesOf(pgn: string): string[] | undefined {
     return undefined;
   }
 
-  return chess
-    .history({ verbose: true })
+  const history = chess.history({ verbose: true });
+  if (history.length === 0) return undefined;
+
+  return history
     .slice(0, MAX_OPENING_PLIES)
-    .map((move) => `${move.from}${move.to}${move.promotion ?? ""}`);
+    .map((move) => positionKey(move.after));
 }
 
 /**
@@ -201,7 +292,14 @@ export function labelGames(
   options: { relabelAll?: boolean } = {},
 ): number {
   const index = openingIndex(db);
-  if (index.size === 0) return 0;
+  if (index.size === 0) {
+    // Distinguished from "nothing to label": returning 0 either way makes a
+    // never-imported dataset look identical to a fully labelled corpus.
+    console.warn(
+      "[chess-retro] no opening lines in the database; skipping labelling.",
+    );
+    return 0;
+  }
 
   const rows = db
     .select({ id: games.id, pgn: games.pgn })
@@ -217,10 +315,10 @@ export function labelGames(
 
   db.transaction((tx) => {
     for (const row of rows) {
-      const moves = uciMovesOf(row.pgn);
-      if (!moves) continue;
+      const positions = gamePositionKeys(row.pgn);
+      if (!positions) continue;
 
-      const match = matchOpening(moves, index);
+      const match = matchOpening(positions, index);
       // A game matching no known line keeps its row and stays in the list;
       // it simply has no name to show.
       if (!match) continue;

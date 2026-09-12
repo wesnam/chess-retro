@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  openingNameFromEcoUrl,
   parseClockMs,
   parseIncrementMs,
   parsePgn,
@@ -43,27 +42,12 @@ describe("increment parsing", () => {
   });
 });
 
-describe("opening name", () => {
-  it("reads a readable name out of chess.com's ECO url", () => {
-    expect(
-      openingNameFromEcoUrl(
-        "https://www.chess.com/openings/Sicilian-Defense-2.Nf3-d6",
-      ),
-    ).toBe("Sicilian Defense 2.Nf3 d6");
-  });
-
-  it("returns nothing when there is no url", () => {
-    expect(openingNameFromEcoUrl(undefined)).toBeUndefined();
-  });
-});
-
 describe("parsing a real chess.com PGN", () => {
   const parsed = parsePgn(firstPgn);
 
   it("reads the headers we depend on", () => {
     expect(parsed.eco).toBe("B50");
     expect(parsed.timeControl).toBe("180");
-    expect(parsed.openingName).toMatch(/Sicilian Defense/);
   });
 
   it("extracts every move", () => {

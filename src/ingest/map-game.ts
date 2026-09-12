@@ -129,12 +129,13 @@ export function mapGame(raw: ChesscomGame, user: string): MappedGame {
       opponentRating: theirs?.rating ?? null,
       rated: raw.rated ?? false,
       endTime: raw.end_time ?? 0,
-      eco: parsed.eco ?? null,
-      // Left blank on purpose. `labelGames` fills these from the Lichess
-      // dataset by longest-prefix match, and it only considers games with no
-      // name yet — so writing chess.com's here would permanently block the
-      // real one. chess.com's ECOUrl slug carries no colon, which made every
-      // variation its own "family" and left the opening dimension unrankable.
+      // All three left blank on purpose: `labelGames` owns them, filling them
+      // from the Lichess dataset by deepest-position match. Writing
+      // chess.com's values here would put two provenances in one column with
+      // no way to tell them apart — and since labelling only considers games
+      // with no name yet, a name written here would permanently block the
+      // real one.
+      eco: null,
       openingName: null,
       openingFamily: null,
       // Stored for side-by-side comparison on the game page only. This must

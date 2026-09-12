@@ -15,7 +15,6 @@ export type ParsedMove = {
 
 export type ParsedPgn = {
   eco: string | undefined;
-  openingName: string | undefined;
   /** Raw chess.com time control, e.g. "180" or "600+5". */
   timeControl: string | undefined;
   moves: ParsedMove[];
@@ -51,22 +50,6 @@ export function parseIncrementMs(timeControl: string | undefined): number {
   if (plus === -1) return 0;
   const increment = Number(timeControl.slice(plus + 1));
   return Number.isFinite(increment) ? increment * 1000 : 0;
-}
-
-/**
- * Derive the opening name from chess.com's ECOUrl, which is the only place the
- * name appears in the PGN. The URL's last segment is the name in hyphenated
- * form, e.g. ".../Sicilian-Defense-2.Nf3-d6" -> "Sicilian Defense 2.Nf3 d6".
- *
- * Ticket 03 replaces this with a proper longest-prefix match against the
- * lichess openings dataset; until then it is better than showing nothing.
- */
-export function openingNameFromEcoUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  const slug = url.split("/").pop();
-  if (!slug) return undefined;
-  const name = slug.replace(/-/g, " ").trim();
-  return name === "" ? undefined : name;
 }
 
 export function parsePgn(pgn: string): ParsedPgn {
@@ -123,7 +106,6 @@ export function parsePgn(pgn: string): ParsedPgn {
 
   return {
     eco: headers.ECO,
-    openingName: openingNameFromEcoUrl(headers.ECOUrl),
     timeControl,
     moves,
   };

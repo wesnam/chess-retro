@@ -147,13 +147,17 @@ export async function syncGames(db: Db, options: SyncOptions): Promise<SyncResul
   }
 
   // Name the newly stored games. Cheap — a handful of map lookups each, no
-  // network and no engine — and doing it here means a game never appears in
-  // the list without its opening.
+  // network and no engine — so a game normally appears in the list with its
+  // opening already attached. Not guaranteed: if this fails the games are
+  // still stored and visible, simply unnamed until the next sync.
   try {
     labelGames(db, username);
-  } catch {
+  } catch (error) {
     // A naming failure must not fail the sync: the games themselves are
-    // stored and usable, and labelling retries on the next run.
+    // stored and usable, and labelling retries on the next run because it
+    // selects on a null opening name. Logged rather than swallowed, so a bug
+    // that throws on every game is not completely invisible.
+    console.warn("[chess-retro] could not label openings:", error);
   }
 
   return result;
