@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   mapGame,
   NotThisUsersGameError,
-  openingFamilyOf,
   resultFor,
   UnusableGameError,
 } from "./map-game";
@@ -41,22 +40,6 @@ describe("result from the user's perspective", () => {
     // chess.com added a draw token we did not know about.
     expect(resultFor(undefined)).toBeUndefined();
     expect(resultFor("some_new_token")).toBeUndefined();
-  });
-});
-
-describe("opening family", () => {
-  it("keeps the family and drops the move detail", () => {
-    expect(openingFamilyOf("Sicilian Defense 2.Nf3 d6 3.Bc4")).toBe(
-      "Sicilian Defense",
-    );
-  });
-
-  it("returns the whole name when there is no move detail", () => {
-    expect(openingFamilyOf("Kings Gambit")).toBe("Kings Gambit");
-  });
-
-  it("returns nothing for a missing name", () => {
-    expect(openingFamilyOf(undefined)).toBeUndefined();
   });
 });
 

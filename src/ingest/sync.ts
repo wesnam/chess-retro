@@ -8,6 +8,7 @@ import {
   type ArchiveMonth,
   type Fetcher,
 } from "./chesscom";
+import { labelGames } from "./openings";
 import {
   mapGame,
   NotThisUsersGameError,
@@ -143,6 +144,16 @@ export async function syncGames(db: Db, options: SyncOptions): Promise<SyncResul
       monthsTotal: pending.length,
       gamesStored: result.stored,
     });
+  }
+
+  // Name the newly stored games. Cheap — a handful of map lookups each, no
+  // network and no engine — and doing it here means a game never appears in
+  // the list without its opening.
+  try {
+    labelGames(db, username);
+  } catch {
+    // A naming failure must not fail the sync: the games themselves are
+    // stored and usable, and labelling retries on the next run.
   }
 
   return result;

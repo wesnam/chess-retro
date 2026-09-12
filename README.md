@@ -19,12 +19,12 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 |---|-------|-------|
 | 01 | Scaffold, database, settings | ✅ done |
 | 02 | Sync chess.com games into a browsable list | ✅ done |
-| 03 | Label games with opening names | |
+| 03 | Label games with opening names | ✅ done |
 | 04 | Analyse one game and show its moves | ✅ done |
 | 05 | Interactive board for a reviewed game | ✅ done |
 | 06 | Batch-analyse the whole corpus, resumably | ✅ done |
 | 07 | Tag moves with tactical motifs | ✅ done |
-| 08 | **Dashboard ranking your top weaknesses** | |
+| 08 | **Dashboard ranking your top weaknesses** | ✅ done |
 | 09 | Plain-English coaching on each weakness | |
 | 10 | Puzzle practice matched to weaknesses | |
 | 11 | Live engine analysis in the browser | |

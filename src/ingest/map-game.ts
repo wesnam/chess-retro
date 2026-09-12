@@ -62,15 +62,6 @@ export function resultFor(raw: string | undefined): "win" | "loss" | "draw" | un
   return undefined;
 }
 
-/** The part of an opening name before the first colon or variation detail. */
-export function openingFamilyOf(name: string | undefined): string | undefined {
-  if (!name) return undefined;
-  // chess.com names look like "Sicilian Defense 2.Nf3 d6 3.Bc4" — the family
-  // is everything before the first move number.
-  const family = name.split(/\s+\d+\./)[0]?.trim();
-  return family === "" ? undefined : family;
-}
-
 /** A game we cannot use: malformed, or a variant we do not analyse. */
 export class UnusableGameError extends Error {}
 
@@ -115,8 +106,6 @@ export function mapGame(raw: ChesscomGame, user: string): MappedGame {
   } catch (cause) {
     throw new UnusableGameError(`could not parse PGN: ${String(cause)}`);
   }
-  const openingName = parsed.openingName;
-
   const userResult = resultFor(mine?.result);
   if (!userResult) {
     throw new UnusableGameError(
@@ -141,8 +130,13 @@ export function mapGame(raw: ChesscomGame, user: string): MappedGame {
       rated: raw.rated ?? false,
       endTime: raw.end_time ?? 0,
       eco: parsed.eco ?? null,
-      openingName: openingName ?? null,
-      openingFamily: openingFamilyOf(openingName) ?? null,
+      // Left blank on purpose. `labelGames` fills these from the Lichess
+      // dataset by longest-prefix match, and it only considers games with no
+      // name yet — so writing chess.com's here would permanently block the
+      // real one. chess.com's ECOUrl slug carries no colon, which made every
+      // variation its own "family" and left the opening dimension unrankable.
+      openingName: null,
+      openingFamily: null,
       // Stored for side-by-side comparison on the game page only. This must
       // never enter an aggregate: mixing two accuracy formulas would make the
       // corpus methodologically incoherent.

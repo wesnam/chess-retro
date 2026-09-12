@@ -1,4 +1,6 @@
 import { reclaimOnce, stopJob } from "@/analysis/job-singleton";
+import { getDb } from "@/db/client";
+import { importOpenings } from "@/ingest/openings";
 
 /**
  * Node-only startup work, kept out of `instrumentation.ts` so the edge build
@@ -6,6 +8,17 @@ import { reclaimOnce, stopJob } from "@/analysis/job-singleton";
  * whether this module is loaded.
  */
 export function registerNode(): void {
+  // The opening dataset is bundled, so this is a local file read into SQLite.
+  // Done at startup rather than on demand, so the first sync already has
+  // names to assign and no request pays for the import.
+  try {
+    importOpenings(getDb());
+  } catch (error) {
+    // Opening names are a label, not a dependency: the app is fully usable
+    // without them, and failing to boot over one would be far worse.
+    console.warn("[chess-retro] could not import opening names:", error);
+  }
+
   const reclaimed = reclaimOnce();
   if (reclaimed > 0) {
     console.log(

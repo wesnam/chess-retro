@@ -67,7 +67,11 @@ lichess-org/chess-openings — CC0 1.0 (public domain)
 https://github.com/lichess-org/chess-openings
 Provided by Lichess
 
-Opening names keyed by move sequence.
+Opening names keyed by move sequence. Roughly 3,800 named lines across five TSV
+files, redistributed unmodified in this repository at src/ingest/openings-data/
+and imported into the local database on first run. As a collection of facts the
+dataset is in the public domain, dedicated under CC0 1.0; no attribution is
+required, and this entry is recorded for provenance.
 
 ================================================================================
 Derived ideas
