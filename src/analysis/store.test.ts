@@ -2,12 +2,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createDb, type Db } from "@/db/client";
 import { games, moves } from "@/db/schema";
-import {
-  AlreadyRunningError,
-  analyseAndStore,
-  findGame,
-  reclaimOrphanedGames,
-} from "./store";
+import { AlreadyRunningError, analyseAndStore, findGame } from "./store";
+// Reclaim lives with the batch job, which owns the live-run bookkeeping it
+// depends on.
+import { reclaimOrphanedGames } from "./batch";
 import type { Analyser } from "./analyze-game";
 import type { Score } from "./accuracy";
 
@@ -234,7 +232,13 @@ describe("when the stored moves disagree with the PGN", () => {
       /ply 3/,
     );
 
-    expect(db.select().from(games).get()!.analysisStatus).not.toBe("done");
+    // Recorded as failed rather than left at `running`: the batch counts only
+    // `pending`, so a game wedged at `running` would be invisible to every
+    // later run and never analysed again.
+    const row = db.select().from(games).get()!;
+    expect(row.analysisStatus).toBe("error");
+    expect(row.analysisError).toMatch(/ply 3/);
+    expect(row.analysisOwner).toBeNull();
   });
 });
 

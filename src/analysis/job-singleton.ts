@@ -70,15 +70,23 @@ export async function startJob(user: string): Promise<JobState> {
   reclaimOnce();
 
   const db = getDb();
-  // Reuse the engines from a paused run rather than paying to start a new set.
-  const engines =
-    existing && existing.user === user
-      ? existing.engines
-      : await startPool(poolSize());
 
-  // A different user's engines are no longer needed.
-  if (existing && existing.user !== user) {
-    for (const engine of existing.engines) engine.dispose();
+  // A paused job's workers are still finishing the games they hold. Reusing
+  // or disposing its engines before they stop would write to an engine
+  // mid-search and cross two positions' results.
+  if (existing) await existing.job.settled();
+
+  // Reuse the engines from a paused run rather than paying to start a new set.
+  let engines;
+  if (existing && existing.user === user) {
+    engines = existing.engines;
+  } else {
+    engines = await startPool(poolSize());
+    // A different user's engines are no longer needed. Disposed only after
+    // that user's workers have stopped, above.
+    if (existing) {
+      for (const engine of existing.engines) engine.dispose();
+    }
   }
 
   const job = new AnalysisJob({ db, user, engines });
@@ -95,11 +103,20 @@ export async function startJob(user: string): Promise<JobState> {
 }
 
 export function pauseJob(user: string): JobState {
-  globalThis.__chessRetroJob?.job.pause();
+  const current = globalThis.__chessRetroJob;
+  // Only this user's job: pausing on one page must not silently stop a run
+  // belonging to a different configured username.
+  if (current?.user === user) current.job.pause();
   return jobState(user);
 }
 
-/** Stop the engines, so shutdown does not orphan Stockfish processes. */
+/**
+ * Stop the engines, so shutdown does not orphan Stockfish processes.
+ *
+ * Synchronous on purpose: it runs from a signal handler, where there is no
+ * opportunity to await. The games still in flight are abandoned mid-search and
+ * left `running`, which is exactly what startup reclaims.
+ */
 export function stopJob(): void {
   const current = globalThis.__chessRetroJob;
   if (!current) return;

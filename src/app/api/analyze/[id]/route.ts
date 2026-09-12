@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { getDb } from "@/db/client";
+import { asLiveRun } from "@/analysis/batch";
 import { getUsername } from "@/settings/settings";
 import { AlreadyRunningError, analyseAndStore, findGame } from "@/analysis/store";
 import { disposeEngine, getEngine } from "@/engine/singleton";
@@ -35,7 +37,12 @@ export async function POST(
 
   try {
     const engine = await getEngine();
-    const analysis = await analyseAndStore(db, game, engine);
+    // Registered as live for the duration, so a reclaim running meanwhile
+    // cannot take this game and hand it to a batch worker as well.
+    const owner = randomUUID();
+    const analysis = await asLiveRun(owner, () =>
+      analyseAndStore(db, game, engine, { owner }),
+    );
     return NextResponse.json({
       status: "done",
       cached: false,

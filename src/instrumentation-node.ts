@@ -25,7 +25,10 @@ export function registerNode(): void {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
       shutdown();
-      process.exit(0);
+      // One tick, so the kill signals sent to the engines are actually
+      // delivered before this process goes away. Exiting in the same tick
+      // leaves them orphaned — the thing this handler exists to prevent.
+      setImmediate(() => process.exit(0));
     });
   }
   process.once("beforeExit", shutdown);

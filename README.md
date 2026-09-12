@@ -136,7 +136,14 @@ different problems with different remedies. Averaging them describes a player wh
   from a list split up front, so an interrupted run loses only the games actually in flight.
 - **`games.analysis_owner` says which run holds a game.** Orphan reclaim uses it to tell a crashed
   run's abandoned games from a live run's — without it, a reclaim during a batch would hand a game
-  already being analysed to a second worker and one result would overwrite the other.
+  already being analysed to a second worker and one result would overwrite the other. The predicate
+  is `and` over the live owners, never `or`: with two runs live, "not owned by A or not owned by B"
+  is true of every game.
+- **Pausing stops new games being taken; the ones in flight finish.** Anything that reuses or
+  disposes a paused job's engines must `await job.settled()` first, or it writes to an engine
+  mid-search and crosses two positions' results.
+- **A game marked `error` leaves the corpus until something re-queues it.** `countPending` excludes
+  failures deliberately, so one bad game cannot retry forever and stall an overnight run.
 - **Positions are indexed by ply**: position 0 is the starting position, position N is the one
   reached after ply N. The board, the evaluation bar, the scoresheet and the graph all address
   positions by that single number — keeping them on one index is what stops the board showing one

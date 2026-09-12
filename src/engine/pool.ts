@@ -67,10 +67,17 @@ export class ResilientEngine implements Analyser {
   private async replace(): Promise<void> {
     if (this.disposed) return;
     this.engine.dispose();
-    this.engine = new UciEngine(this.options);
+
+    const replacement = new UciEngine(this.options);
+    this.engine = replacement;
     // A failure to start is left to surface on the next search rather than
     // thrown here, which would mask the original error.
-    await this.engine.start().catch(() => {});
+    await replacement.start().catch(() => {});
+
+    // dispose() may have run while that start was in flight. Without this the
+    // replacement outlives the pool as an orphaned Stockfish process — the
+    // very thing the shutdown handler exists to prevent.
+    if (this.disposed) replacement.dispose();
   }
 }
 

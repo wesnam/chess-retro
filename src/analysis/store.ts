@@ -1,4 +1,5 @@
 import { and, eq, ne } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import type { Db } from "@/db/client";
 import { games, moves } from "@/db/schema";
 import { analyseGame, type Analyser, type GameAnalysis } from "./analyze-game";
@@ -32,9 +33,13 @@ export async function analyseAndStore(
      * job's own game as already running.
      */
     alreadyClaimed?: boolean;
+    /** Identifies this caller in `analysis_owner`; defaults to a fresh id. */
+    owner?: string;
   } = {},
 ): Promise<GameAnalysis> {
-  if (!options.alreadyClaimed && !claimGame(db, game)) {
+  const owner = options.owner ?? randomUUID();
+
+  if (!options.alreadyClaimed && !claimGame(db, game, owner)) {
     throw new AlreadyRunningError(
       `Game ${game.id} is already being analysed.`,
     );
@@ -48,25 +53,48 @@ export async function analyseAndStore(
       engine,
     );
   } catch (error) {
-    // Only our own claim may be marked failed: by now another request could
-    // have finished this game, and clobbering that would show an error
-    // beside a populated accuracy panel.
-    db.update(games)
-      .set({
-        analysisStatus: "error",
-        analysisError: error instanceof Error ? error.message : String(error),
-      })
-      .where(
-        and(
-          eq(games.id, game.id),
-          eq(games.user, game.user),
-          eq(games.analysisStatus, "running"),
-        ),
-      )
-      .run();
+    markFailed(db, game, error);
     throw error;
   }
 
+  try {
+    commit(db, game, analysis);
+  } catch (error) {
+    // A failure here — a ply the stored rows do not have — would otherwise
+    // leave the game wedged at `running` forever, invisible to both the batch
+    // (which counts only `pending`) and to a retry.
+    markFailed(db, game, error);
+    throw error;
+  }
+
+  return analysis;
+}
+
+/**
+ * Record a game as failed, releasing the claim.
+ *
+ * Guarded on the row still being `running`: by now another caller could have
+ * finished this game, and clobbering that would show an error beside a
+ * populated accuracy panel.
+ */
+function markFailed(db: Db, game: StoredGame, error: unknown): void {
+  db.update(games)
+    .set({
+      analysisStatus: "error",
+      analysisError: error instanceof Error ? error.message : String(error),
+      analysisOwner: null,
+    })
+    .where(
+      and(
+        eq(games.id, game.id),
+        eq(games.user, game.user),
+        eq(games.analysisStatus, "running"),
+      ),
+    )
+    .run();
+}
+
+function commit(db: Db, game: StoredGame, analysis: GameAnalysis): void {
   db.transaction((tx) => {
     for (const move of analysis.moves) {
       const result = tx
@@ -116,8 +144,6 @@ export async function analyseAndStore(
       .where(and(eq(games.id, game.id), eq(games.user, game.user)))
       .run();
   });
-
-  return analysis;
 }
 
 /**
@@ -126,10 +152,10 @@ export async function analyseAndStore(
  * request got there first, so two concurrent callers cannot both analyse the
  * same game and have the loser overwrite the winner.
  */
-function claimGame(db: Db, game: StoredGame): boolean {
+function claimGame(db: Db, game: StoredGame, owner: string): boolean {
   const result = db
     .update(games)
-    .set({ analysisStatus: "running", analysisError: null })
+    .set({ analysisStatus: "running", analysisError: null, analysisOwner: owner })
     .where(
       and(
         eq(games.id, game.id),
@@ -139,19 +165,6 @@ function claimGame(db: Db, game: StoredGame): boolean {
     )
     .run();
   return result.changes > 0;
-}
-
-/**
- * Games left `running` by a crashed process, returned to `pending` so they are
- * picked up again. Safe because a game's rows are only written on completion.
- */
-export function reclaimOrphanedGames(db: Db): number {
-  const result = db
-    .update(games)
-    .set({ analysisStatus: "pending" })
-    .where(eq(games.analysisStatus, "running"))
-    .run();
-  return result.changes;
 }
 
 export function findGame(

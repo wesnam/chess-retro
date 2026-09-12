@@ -24,15 +24,24 @@ const cp = (n: number): Score => ({ kind: "cp", cp: n });
 
 const PGN = '[Event "Test"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
+/** A promise a test can hold open, to keep a job's claim alive on demand. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 function stubEngine(
-  options: { failOn?: Set<string>; onGame?: (n: number) => void } = {},
+  options: { onGame?: (n: number) => void | Promise<void> } = {},
 ): Analyser & { gamesSeen: number } {
   const stub = {
     depth: 18,
     gamesSeen: 0,
     async newGame() {
       stub.gamesSeen += 1;
-      options.onGame?.(stub.gamesSeen);
+      await options.onGame?.(stub.gamesSeen);
     },
     async analyse(_fen: string) {
       return { score: cp(10), bestMove: "e2e4", depth: 18 };
@@ -313,6 +322,44 @@ describe("reclaiming orphans", () => {
 
     expect(reclaimed).toBe(0);
     expect(job.progress().completed).toBe(4);
+  });
+
+  it("leaves games alone when several jobs are live at once", async () => {
+    // Two runs in flight is the case an `or` over the live owners gets wrong:
+    // a game held by A satisfies "owner is not B", so it reads as orphaned and
+    // is taken from A while A is still analysing it.
+    for (let i = 0; i < 6; i++) seedGame(`g${i}`);
+    seedGame("h1", "bob");
+
+    let reclaimed = -1;
+    const blockAlice = deferred();
+
+    const aliceEngine = stubEngine({
+      onGame: (n) => {
+        // Hold Alice's first game open so her claim is live while Bob runs.
+        if (n === 1) return blockAlice.promise;
+      },
+    });
+    const alice = new AnalysisJob({
+      db,
+      user: "alice",
+      engines: [aliceEngine],
+    });
+    const aliceRun = alice.run();
+
+    const bobEngine = stubEngine({
+      onGame: () => {
+        // Both runs are now live and each holds a game.
+        reclaimed = reclaimOrphanedGames(db);
+      },
+    });
+    await new AnalysisJob({ db, user: "bob", engines: [bobEngine] }).run();
+
+    blockAlice.resolve();
+    await aliceRun;
+
+    expect(reclaimed).toBe(0);
+    expect(alice.progress().failed).toBe(0);
   });
 
   it("does not resurrect a finished game", () => {

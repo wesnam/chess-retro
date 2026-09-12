@@ -34,8 +34,11 @@ export function AnalyzeAllButton() {
       const next = (await response.json()) as JobState;
       setState(next);
 
-      // The list behind this shows stale statuses once a run ends.
-      if (wasRunning.current && next.status !== "running") {
+      // The list behind this shows stale statuses once games finish. A pause
+      // still leaves games in flight, so the refresh waits for them to stop
+      // rather than firing the moment the button is pressed.
+      const settling = next.status === "paused" && next.remaining > 0;
+      if (wasRunning.current && next.status !== "running" && !settling) {
         wasRunning.current = false;
         router.refresh();
       }
@@ -50,7 +53,9 @@ export function AnalyzeAllButton() {
   }, [poll]);
 
   useEffect(() => {
-    if (state?.status !== "running") return;
+    // Paused keeps polling too: `pause` only stops new games being taken, and
+    // the ones already in flight go on completing for a while yet.
+    if (state?.status !== "running" && state?.status !== "paused") return;
     const timer = setInterval(() => void poll(), POLL_MS);
     return () => clearInterval(timer);
   }, [state?.status, poll]);

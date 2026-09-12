@@ -60,6 +60,8 @@ export class AnalysisJob {
   private failed = 0;
   private startedAt: number | undefined;
   private finishedAt: number | undefined;
+  /** The in-flight run, so a caller can wait for the workers to actually stop. */
+  private running: Promise<void> | undefined;
 
   constructor(options: JobOptions) {
     this.db = options.db;
@@ -90,10 +92,14 @@ export class AnalysisJob {
     // Registered for as long as this run holds games, so a reclaim triggered
     // meanwhile cannot take them back out from under it.
     liveRuns.add(this.id);
+    this.running = Promise.all(
+      this.engines.map((engine) => this.worker(engine)),
+    ).then(() => undefined);
     try {
-      await Promise.all(this.engines.map((engine) => this.worker(engine)));
+      await this.running;
     } finally {
       liveRuns.delete(this.id);
+      this.running = undefined;
     }
 
     this.finishedAt = this.now();
@@ -108,6 +114,17 @@ export class AnalysisJob {
    */
   pause(): void {
     if (this.status === "running") this.status = "paused";
+  }
+
+  /**
+   * Wait for the workers to actually stop.
+   *
+   * `pause()` only asks them to; the games already in flight still have to
+   * finish and commit. Anything that reuses or disposes this job's engines
+   * must wait for this first, or it writes to an engine mid-search.
+   */
+  async settled(): Promise<void> {
+    await this.running;
   }
 
   progress(): Progress {
@@ -162,45 +179,51 @@ export class AnalysisJob {
    * it moves on to the next.
    */
   private claimNext(): StoredGame | undefined {
-    // Ordered oldest-first so a resumed run makes steady forward progress
-    // rather than revisiting whatever the previous run happened to skip.
-    const candidate = this.db
-      .select({
-        id: games.id,
-        user: games.user,
-        pgn: games.pgn,
-        userColor: games.userColor,
-        analysisStatus: games.analysisStatus,
-      })
-      .from(games)
-      .where(and(eq(games.user, this.user), eq(games.analysisStatus, "pending")))
-      .orderBy(games.endTime)
-      .limit(1)
-      .get();
+    // Loops rather than recursing: a long streak of lost races would otherwise
+    // grow the stack until it overflowed.
+    for (;;) {
+      // Ordered oldest-first so a resumed run makes steady forward progress
+      // rather than revisiting whatever the previous run happened to skip.
+      const candidate = this.db
+        .select({
+          id: games.id,
+          user: games.user,
+          pgn: games.pgn,
+          userColor: games.userColor,
+          analysisStatus: games.analysisStatus,
+        })
+        .from(games)
+        .where(
+          and(eq(games.user, this.user), eq(games.analysisStatus, "pending")),
+        )
+        .orderBy(games.endTime)
+        .limit(1)
+        .get();
 
-    if (!candidate) return undefined;
+      if (!candidate) return undefined;
 
-    const claimed = this.db
-      .update(games)
-      .set({
-        analysisStatus: "running",
-        analysisOwner: this.id,
-        analysisError: null,
-      })
-      .where(
-        and(
-          eq(games.id, candidate.id),
-          eq(games.user, candidate.user),
-          // Still pending: another worker may have taken it since the select.
-          eq(games.analysisStatus, "pending"),
-        ),
-      )
-      .run();
+      const claimed = this.db
+        .update(games)
+        .set({
+          analysisStatus: "running",
+          analysisOwner: this.id,
+          analysisError: null,
+        })
+        .where(
+          and(
+            eq(games.id, candidate.id),
+            eq(games.user, candidate.user),
+            // Still pending: another worker may have taken it since the select.
+            eq(games.analysisStatus, "pending"),
+          ),
+        )
+        .run();
 
-    // Lost the race; try again for a different game.
-    if (claimed.changes === 0) return this.claimNext();
-
-    return { ...candidate, analysisStatus: "running" };
+      // Lost the race; go round for a different game.
+      if (claimed.changes > 0) {
+        return { ...candidate, analysisStatus: "running" };
+      }
+    }
   }
 
   private recordFailure(game: StoredGame, error: unknown): void {
@@ -245,6 +268,25 @@ export function countPending(db: Db, user: string): number {
 const liveRuns = new Set<string>();
 
 /**
+ * Mark an owner live for the duration of `work`.
+ *
+ * Used by the single-game route as well as the batch: any claim that is being
+ * actively worked must be visible to reclaim, or a sweep during an on-demand
+ * analysis would hand that game to a second worker.
+ */
+export async function asLiveRun<T>(
+  owner: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  liveRuns.add(owner);
+  try {
+    return await work();
+  } finally {
+    liveRuns.delete(owner);
+  }
+}
+
+/**
  * Return games abandoned by a crashed run to `pending`.
  *
  * Games held by a run that is still live are deliberately left alone: taking
@@ -261,13 +303,16 @@ export function reclaimOrphanedGames(db: Db): number {
     .where(
       and(
         eq(games.analysisStatus, "running"),
-        // A game with no owner predates this column or lost its owner in a
-        // crash; either way no live run holds it.
+        // Held by NO live run: `and` over the owners, not `or`. With two runs
+        // live, "not owned by A OR not owned by B" is true of every game, so
+        // an `or` would reclaim games out from under both of them.
+        // A null owner predates this column or lost its owner in a crash;
+        // either way no live run holds it.
         owners.length === 0
           ? undefined
           : or(
               isNull(games.analysisOwner),
-              ...owners.map((owner) => ne(games.analysisOwner, owner)),
+              and(...owners.map((owner) => ne(games.analysisOwner, owner))),
             ),
       ),
     )
