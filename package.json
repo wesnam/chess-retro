@@ -5,6 +5,25 @@
   "type": "module",
   "license": "GPL-3.0-or-later",
   "description": "Find the weaknesses you keep repeating across hundreds of chess.com games.",
+  "keywords": [
+    "chess",
+    "chess.com",
+    "stockfish",
+    "analysis",
+    "puzzles",
+    "weaknesses"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wesnam/chess-retro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wesnam/chess-retro/issues"
+  },
+  "homepage": "https://github.com/wesnam/chess-retro#readme",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

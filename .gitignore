@@ -9,9 +9,12 @@ next-env.d.ts
 # Local data: database, puzzle dumps, engine binaries
 data/
 
-# Environment
+# Environment — secrets never belong in the repo.
+# `.env.example` is deliberately NOT ignored: it is the template, and carries
+# no values.
 .env
-.env.local
+.env.*
+!.env.example
 
 # OS / editor
 .DS_Store

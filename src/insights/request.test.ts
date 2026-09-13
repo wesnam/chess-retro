@@ -50,6 +50,8 @@ function report(over: Partial<WeaknessReport> = {}): WeaknessReport {
     weaknesses: [weakness()],
     suppressed: 2,
     analysedMoves: 4200,
+    fit: { applies: true, reason: "in-band" },
+    rating: 640,
     ...over,
   };
 }

@@ -84,6 +84,24 @@ h2 {
   margin: 0 0 2rem;
 }
 
+/*
+ * Says the peer comparison does not describe this reader. Marked with the
+ * accent rather than the danger colour: nothing has gone wrong, the numbers
+ * simply mean less than they appear to, and a red banner would read as an
+ * error the reader is expected to fix.
+ */
+.caveat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 2rem;
+  padding: 0.75rem 1rem;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

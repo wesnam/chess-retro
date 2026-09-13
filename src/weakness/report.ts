@@ -8,6 +8,8 @@ import {
 } from "./queries";
 import { RAPID_600_REFERENCE } from "./reference-data";
 import { referenceTable } from "./reference";
+import { referenceFit, type ReferenceFit } from "./band";
+import { typicalRating } from "./rating";
 import {
   MIN_GAMES,
   MIN_OPPORTUNITIES,
@@ -36,6 +38,17 @@ export type WeaknessReport = {
    */
   suppressed: number;
   analysedMoves: number;
+  /**
+   * Whether the baked-in peer cohort describes this player at all.
+   *
+   * Carried on the report rather than worked out by the page, because the
+   * ranking it qualifies is computed here: a player outside the band is being
+   * measured against the wrong population, and the number that comes back is
+   * confident and wrong rather than merely imprecise.
+   */
+  fit: ReferenceFit;
+  /** The rating the fit was judged on, so the caller can show its working. */
+  rating: number | undefined;
 };
 
 export function weaknessReport(
@@ -47,6 +60,12 @@ export function weaknessReport(
 
   const candidates = allCandidates(db, scope);
   const baseline = corpusBaseline(db, scope);
+
+  // Judged before ranking, and reported alongside it. The rates are still
+  // applied when they do not fit — dropping to lift would silently change
+  // what the ranking means — so the caveat travels with the answer instead.
+  const rating = typicalRating(db, scope);
+  const fit = referenceFit({ rating, timeClass: scope.timeClass });
 
   // Ranked against players of similar strength where a peer rate exists.
   // Lift — cost against the player's OWN average — cannot answer "what am I
@@ -77,6 +96,8 @@ export function weaknessReport(
     baseline,
     suppressed,
     analysedMoves,
+    fit,
+    rating,
     weaknesses: ranked.slice(0, limit).map((weakness) => ({
       ...weakness,
       examples: examplesFor(db, scope, weakness, examplesPer),

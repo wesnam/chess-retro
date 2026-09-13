@@ -29,6 +29,25 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 10 | **Puzzle practice matched to weaknesses** | ✅ done |
 | 11 | **Live engine analysis in the browser** | ✅ done |
 | 12 | Incremental sync and release readiness | ✅ done |
+| 13 | Rebuild the peer cohort from your own rating | planned |
+
+## Known limitations
+
+Worth knowing before you spend an hour analysing games:
+
+- **The bundled peer cohort is 9 players rated 596–682, rapid.** Weaknesses are ranked by comparing
+  your miss rates against theirs, so if you are much stronger or weaker than that the *sizes* of the
+  gaps are off — a stronger player is understated, to the point where the dashboard can imply no
+  weaknesses at all. The ordering holds up better than the numbers, the app tells you when you are
+  outside the band, and the cohort can be rebuilt from your own opponents. See
+  [How it works](#how-it-works).
+- **Single player per install, in practice.** The schema keeps multiple accounts apart correctly, but
+  there is no account switcher in the UI — one username at a time, changed in Settings.
+- **Local only.** No deployment story, no auth, no multi-user server. `npm start` on your own machine
+  is the intended way to run it, and the engine pool assumes it.
+- **macOS-developed.** Nothing in it is macOS-specific beyond `brew install stockfish`, but Linux and
+  Windows are untested.
+- **Early development.** Interfaces and schema still move; a schema change may cost you a re-analysis.
 
 ## Requirements
 
@@ -140,7 +159,7 @@ keeps its database under `data/`, and runs every feature except the written coac
 | `STOCKFISH_PATH` | `stockfish` | The engine binary. Only needed when Stockfish is not on your `PATH`. |
 | `ANTHROPIC_API_KEY` | *(unset)* | Enables the written coaching. Read server-side only; it never reaches the browser. |
 
-Set them in a `.env.local` file at the repository root, or in the environment:
+Copy [`.env.example`](.env.example) to `.env.local` and edit, or set them in the environment:
 
 ```sh
 STOCKFISH_PATH=/opt/homebrew/bin/stockfish npm run dev
@@ -235,6 +254,30 @@ the request that produced it and dropped if unsupported. Practice themes pass tw
 must be a motif a detector can emit (so ticket 10 can look up puzzles by it) **and** one this player
 was actually measured on — a correctly spelled `backRankMate` is still advice about chess in general
 if their data never mentioned it. One invented claim costs that paragraph, not the page.
+
+**You are ranked against players of similar strength — from a cohort of nine.** "What am I bad at"
+cannot be answered against your own average, because that divides out the thing being asked about: a
+grandmaster and a beginner both come out around 1.5x on their worst tactic, and their top-five lists
+look alike. So miss rates are compared against real games from players in the same rating band.
+
+⚠️ **The bundled cohort is narrow, and it is probably not you.** `RAPID_600_REFERENCE` was measured
+on 270 analysed games from **9 chess.com players rated 596–682, rapid only**. It ships baked in so a
+fresh install ranks against peers immediately rather than first spending hours of engine time
+analysing strangers' games — but outside that band the comparison is wrong in a knowable direction:
+
+| Your strength | What the ranking does |
+|---------------|-----------------------|
+| Rapid ~600 | Works as intended |
+| Well above the band | **Understates you.** You beat the cohort's rate on nearly everything, so every excess shrinks toward zero and the dashboard can imply you have no weaknesses |
+| Well below the band | **Overstates you.** Missing more than the cohort does is expected at your rating |
+| Another time control | Rough. Blunder rates differ by time control, so the ordering is more trustworthy than the sizes |
+
+The dashboard detects this and says so above the rankings, rather than reporting a confident number
+it cannot support. In every case the **order** of the list survives better than the size of each gap.
+
+Rebuilding the cohort from players at your own strength is `referenceRates()` in
+`src/weakness/reference.ts` — it recomputes these rates from any set of analysed players in the
+database. Wiring that to a UI is ticket 13, and is the intended fix for this limitation.
 
 **Time control is a filter, never an aggregation axis.** A blitz blunder and a rapid blunder are
 different problems with different remedies. Averaging them describes a player who does not exist.

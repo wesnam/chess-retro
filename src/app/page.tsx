@@ -4,6 +4,7 @@ import { getUsername } from "@/settings/settings";
 import { countGames } from "@/games/queries";
 import { weaknessReport } from "@/weakness/report";
 import { MIN_GAMES, MIN_OPPORTUNITIES } from "@/weakness/score";
+import { fitCaveat } from "@/weakness/band-copy";
 import { TimeClassFilter } from "./TimeClassFilter";
 import { WeaknessList } from "./WeaknessList";
 
@@ -74,10 +75,32 @@ export default async function DashboardPage({
             {timeClass} moves. You lose {report.baseline.toFixed(1)} points of
             win probability on an average move; these cost you more.
           </p>
+          <CohortCaveat report={report} />
           <WeaknessList weaknesses={report.weaknesses} timeClass={timeClass} />
         </>
       )}
     </>
+  );
+}
+
+/**
+ * Says so when the peer cohort does not describe this player.
+ *
+ * Rendered above the list rather than beside a number, because it qualifies
+ * every ranking on the page: the comparison is what puts them in that order.
+ */
+function CohortCaveat({
+  report,
+}: {
+  report: { fit: Parameters<typeof fitCaveat>[0]; rating: number | undefined };
+}) {
+  const caveat = fitCaveat(report.fit, report.rating);
+  if (!caveat) return null;
+
+  return (
+    <p className="caveat" role="note">
+      {caveat}
+    </p>
   );
 }
 
