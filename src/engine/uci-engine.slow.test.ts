@@ -192,12 +192,13 @@ describe("a pool engine", () => {
     // Kill the underlying process the way a crash would.
     (engine as unknown as { engine: UciEngine }).engine.dispose();
 
-    // The first call after the death fails and triggers the replacement.
-    await expect(engine.analyse(STARTING_FEN)).rejects.toThrow(EngineError);
-
-    // The next one works, on a fresh process.
+    // The death is absorbed rather than surfaced: the position is retried on a
+    // replacement process and answered, so a crashed engine costs the caller
+    // nothing. The answer must be this position's own, not a stale reply from
+    // the process that died.
     const after = await engine.analyse("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1");
     expect(after.score.kind).toBe("mate");
+    expect(after.bestMove).toBe("a1a8");
   }, 40_000);
 
   it("starts a pool of independent engines", async () => {
