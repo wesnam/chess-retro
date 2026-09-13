@@ -8,6 +8,7 @@ import { weaknessCopy } from "@/weakness/copy";
 import { practiceTheme } from "@/puzzles/theme";
 import {
   CoachNote,
+  CoachOffer,
   PracticePlan,
   useCoaching,
   type CoachingState,
@@ -43,6 +44,8 @@ export function WeaknessList({
           </li>
         ))}
       </ol>
+      {/* After the list: an offer, not a banner over the thing they came for. */}
+      <CoachOffer coaching={coaching} hasWeaknesses={weaknesses.length > 0} />
     </>
   );
 }

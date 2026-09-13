@@ -102,6 +102,72 @@ h2 {
   padding: 0.75rem 1rem;
 }
 
+/*
+ * The offer to turn on written coaching. Muted and after the rankings, because
+ * the dashboard is complete without it — this is information, not a call to
+ * action, and it disappears for good when dismissed.
+ */
+.coach-offer {
+  align-items: flex-start;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  display: flex;
+  font-size: 0.85rem;
+  gap: 0.75rem;
+  justify-content: space-between;
+  line-height: 1.5;
+  margin: 2rem 0 0;
+  padding-top: 1rem;
+}
+
+.coach-offer code {
+  background: var(--surface);
+  border-radius: 3px;
+  font-size: 0.9em;
+  padding: 0.1rem 0.3rem;
+}
+
+.coach-offer button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+
+.coach-offer button:hover {
+  color: var(--text);
+}
+
+/* The coaching status block on Settings. */
+.settings-coaching {
+  margin-top: 2rem;
+}
+
+.settings-coaching h2 {
+  margin: 0 0 0.25rem;
+}
+
+.status-on,
+.status-off {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+}
+
+.status-on {
+  color: var(--ok);
+}
+
+.status-off {
+  color: var(--muted);
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

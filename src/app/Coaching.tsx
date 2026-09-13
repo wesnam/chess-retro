@@ -9,6 +9,7 @@ import {
   type CoachResponse,
   type CoachingState,
 } from "./coaching-state";
+import { readDismissed, rememberDismissed, shouldOfferCoaching } from "./coach-hint";
 
 /**
  * The coach's prose, fetched after the statistics are already on screen.
@@ -116,5 +117,55 @@ export function PracticePlan({
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * One line telling a reader that written coaching exists.
+ *
+ * Shown only once a ranking is on screen with no coaching beside it, which is
+ * the state where the feature is otherwise undiscoverable: both components
+ * above render null without a key, so nothing on the page suggests there is
+ * anything to turn on. Dismissible, and remembered — this is a page people
+ * open every day.
+ */
+export function CoachOffer({
+  coaching,
+  hasWeaknesses,
+}: {
+  coaching: CoachingState;
+  hasWeaknesses: boolean;
+}) {
+  // Starts dismissed so the hint cannot flash before the browser has been
+  // asked: the server renders this too, and it has no localStorage.
+  const [dismissed, setDismissed] = useState(true);
+
+  useEffect(() => {
+    setDismissed(readDismissed());
+  }, []);
+
+  if (!shouldOfferCoaching({ status: coaching.status, hasWeaknesses, dismissed })) {
+    return null;
+  }
+
+  return (
+    <p className="coach-offer">
+      <span>
+        Want these explained in words? Setting an{" "}
+        <code>ANTHROPIC_API_KEY</code> adds a short written paragraph to each
+        weakness — about 5¢ per ranking, and the dashboard works exactly as it
+        does now without one.
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          rememberDismissed();
+          setDismissed(true);
+        }}
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </p>
   );
 }
