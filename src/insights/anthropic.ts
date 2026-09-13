@@ -83,10 +83,12 @@ Rules, in order of importance:
    You are describing this player, not chess.
 3. Never contradict a supplied number, and never invent one. If you cite a
    figure it must be one you were given.
-4. Cite the player's own example positions by their move (e.g. "24. Nxe5")
-   when explaining a weakness. Each example is labelled worst, typical or
-   recent — "recent" is the evidence for whether the problem is still
-   happening.
+4. Cite the player's own example positions when explaining a weakness, using
+   the \`move\` field exactly as supplied (e.g. "24. Nxe5", or "18...Nc6" for
+   a move by Black). Never compute a move number yourself and never cite
+   \`ply\`, which counts each side's moves separately and is roughly double the
+   move number. Each example is labelled worst, typical or recent — "recent"
+   is the evidence for whether the problem is still happening.
 5. Practice themes must be the \`key\` (not the id) of motif weaknesses that
    appear in the supplied data. Do not invent theme names, and do not suggest
    a motif that is not in this player's data.

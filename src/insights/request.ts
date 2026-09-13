@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { RankedWeakness, WeaknessReport } from "@/weakness/report";
 import { weaknessCopy } from "@/weakness/copy";
 import { selectExamples, type ExampleRole } from "./examples";
+import { describeMove, moveNumber } from "@/games/move-notation";
 
 /**
  * The payload the model is given, and the key it is cached under.
@@ -17,7 +18,15 @@ export type InsightExample = {
   role: ExampleRole;
   gameId: string;
   ply: number;
-  /** "24. Nxe5" — how a person refers to the move. */
+  /**
+   * The move number a player would cite, supplied rather than derived.
+   *
+   * The model is given this so it never has to convert a ply itself: asked to,
+   * a weaker one quotes the raw ply as a move number and sends the reader past
+   * the end of the game.
+   */
+  moveNumber: number;
+  /** "24. Nxe5", or "18...Nc6" for Black — how a person refers to the move. */
   move: string;
   fen: string;
   classification: string | null;
@@ -96,7 +105,8 @@ function toInsightWeakness(weakness: RankedWeakness): InsightWeakness {
       role,
       gameId: example.gameId,
       ply: example.ply,
-      move: `${Math.ceil(example.ply / 2)}. ${example.san}`,
+      moveNumber: moveNumber(example.ply),
+      move: describeMove(example.ply, example.san),
       fen: example.fenBefore,
       classification: example.classification,
       winPctLost: round(example.winPctLost, 1),

@@ -6,6 +6,7 @@ import { weaknessId } from "@/insights/request";
 import type { WeaknessExample } from "@/weakness/queries";
 import { weaknessCopy } from "@/weakness/copy";
 import { practiceTheme } from "@/puzzles/theme";
+import { describeMove } from "@/games/move-notation";
 import {
   CoachNote,
   CoachOffer,
@@ -140,14 +141,14 @@ function WeaknessCard({
 }
 
 function Example({ example }: { example: WeaknessExample }) {
-  const moveNumber = Math.ceil(example.ply / 2);
+  // Not `Math.ceil(ply / 2)` with a bare dot: that labels every Black move as
+  // White's, naming a real move by the other player at the same number.
+  const move = describeMove(example.ply, example.san);
   const date = new Date(example.endTime * 1000).toISOString().slice(0, 10);
 
   return (
     <Link href={`/games/${example.gameId}?ply=${example.ply}`} className="example">
-      <span className="example-move">
-        {moveNumber}. {example.san}
-      </span>
+      <span className="example-move">{move}</span>
       {example.classification && (
         <span className={`tag ${example.classification}`}>
           {example.classification}
