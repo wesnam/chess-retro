@@ -10,6 +10,11 @@ import {
 } from "@/games/review-model";
 import type { MoveRow } from "@/games/queries";
 import { missedSummary } from "@/analysis/motifs/labels";
+import {
+  CLASSIFICATION_LEGEND,
+  explainMove,
+  formatUci,
+} from "@/games/explain-move";
 
 /**
  * The interactive review: one board, a clickable move list, an eval bar and an
@@ -163,11 +168,11 @@ export function GameReview({
           the note appears on the same position as the best-move arrow rather
           than one step after it.
         */}
-        {missedMotifs[index + 1]?.length ? (
-          <p className="missed-motif">
-            You {missedSummary(missedMotifs[index + 1]!)}.
-          </p>
-        ) : null}
+        <MoveVerdict
+          move={moves.find((m) => m.ply === index + 1)}
+          missed={missedMotifs[index + 1]}
+          analysed={analysed}
+        />
         <ScoreSheet
           moves={moves}
           index={index}
@@ -175,6 +180,7 @@ export function GameReview({
           analysed={analysed}
           missedMotifs={missedMotifs}
         />
+        {analysed && <Legend />}
       </div>
 
       {analysed && review.graph.length > 0 && (
@@ -186,6 +192,79 @@ export function GameReview({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * What the move played from this position was, and why it earned its mark.
+ *
+ * The scoresheet could only show a symbol. A reader who does not already know
+ * the notation learns nothing from `??`, and even one who does is not told
+ * what it cost or what was better.
+ */
+function MoveVerdict({
+  move,
+  missed,
+  analysed,
+}: {
+  move: MoveRow | undefined;
+  missed: string[] | undefined;
+  analysed: boolean;
+}) {
+  if (!move || !analysed) return null;
+  const explained = explainMove(move);
+  if (!explained) return null;
+
+  return (
+    <div className={`verdict verdict-${move.classification}`}>
+      <p className="verdict-head">
+        <span className="verdict-move">{move.san}</span>
+        <span className={`tag ${move.classification}`}>{explained.name}</span>
+      </p>
+      <p className="verdict-why">{explained.why}</p>
+      {explained.betterMove && (
+        <p className="verdict-better">
+          Engine preferred <strong>{formatUci(explained.betterMove)}</strong>
+          {/* The arrow on the board shows the same move. */}
+        </p>
+      )}
+      {missed?.length ? (
+        <p className="verdict-missed">You {missedSummary(missed)}.</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * What the marks mean.
+ *
+ * Without this the scoresheet is a column of unexplained symbols, and the
+ * thresholds behind them are invisible — so a reader cannot tell whether `?!`
+ * is a rounding error or a real error.
+ */
+function Legend() {
+  return (
+    <details className="legend">
+      <summary>What do the marks mean?</summary>
+      <dl>
+        {CLASSIFICATION_LEGEND.map((entry) => (
+          <div key={entry.key} className="legend-row">
+            <dt>
+              <span className={`tag ${entry.key}`}>
+                {entry.symbol || "\u2014"}
+              </span>
+              {entry.name}
+            </dt>
+            <dd>{entry.meaning}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="legend-note">
+        Marks are decided by how much <strong>win probability</strong> a move
+        gave up, not by material. Losing three pawns in an already-won position
+        is not a blunder; hanging one in a level position is.
+      </p>
+    </details>
   );
 }
 

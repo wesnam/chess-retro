@@ -832,3 +832,100 @@ button.move-slot:hover {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* --- Why this move earned its mark --- */
+
+.verdict {
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.6rem 0 0.9rem;
+}
+
+.verdict-blunder { border-left-color: #c0392b; }
+.verdict-mistake { border-left-color: #d35400; }
+.verdict-inaccuracy { border-left-color: #c9a227; }
+.verdict-good,
+.verdict-excellent { border-left-color: #5a9e5a; }
+.verdict-best { border-left-color: #2d7d46; }
+
+.verdict-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+}
+
+.verdict-move {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.verdict-why,
+.verdict-better,
+.verdict-missed {
+  margin: 0.2rem 0 0;
+  font-size: 0.87rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.verdict-better strong {
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--fg);
+}
+
+.verdict-missed {
+  color: var(--fg);
+}
+
+/* --- Legend --- */
+
+.legend {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.legend summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.legend summary:hover {
+  color: var(--fg);
+}
+
+.legend dl {
+  margin: 0.6rem 0 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.legend-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.legend-row dt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+}
+
+.legend-row dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.legend-note {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
