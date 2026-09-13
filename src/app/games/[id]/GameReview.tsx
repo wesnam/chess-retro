@@ -10,7 +10,7 @@ import {
   whitePovScore,
 } from "@/games/review-model";
 import { whitePovLiveScore } from "@/games/live-analysis";
-import { plyShownAt } from "@/games/position-move";
+import { plyShownAt, positionForPly } from "@/games/position-move";
 import type { MoveRow } from "@/games/queries";
 import { missedSummary } from "@/analysis/motifs/labels";
 import {
@@ -671,19 +671,17 @@ function MoveButton({
   const missed = missedMotifs[move.ply];
 
   /**
-   * Highlight the move that is ABOUT to be played from this position, not the
-   * one that led to it.
+   * Highlight the move the board is SHOWING — the one that produced this
+   * position — so the grid and the board never describe different moves.
    *
-   * Position N-1 is where ply N is chosen, and it is where the best-move
-   * arrow and the "you missed" note for ply N are drawn (both keyed off
-   * `index + 1`). Highlighting ply `index` instead put the scoresheet cursor
-   * one move behind the arrow, so a dashboard example linking to a blunder
-   * showed the cursor on the quiet move before it.
-   *
-   * Selecting a move likewise jumps to `ply - 1`, so clicking a move in the
-   * list lands where that move's own arrow is drawn.
+   * This used to be `index + 1`, the move about to be played, which put the
+   * scoresheet a turn ahead of everything else on the page: at the position
+   * where Nf3 had just been played the cursor sat on Qf6. It was that way to
+   * fix a dashboard link landing a move short of the blunder it named; the
+   * link itself now opens the right position (`positionForPly`), so the cursor
+   * can agree with the board again.
    */
-  const isCurrent = index + 1 === move.ply;
+  const isCurrent = plyShownAt(index) === move.ply;
 
   return (
     <button
@@ -691,7 +689,7 @@ function MoveButton({
       className={`move-slot${isCurrent ? " current" : ""}${
         move.isUserMove ? " mine" : ""
       }`}
-      onClick={() => onSelect(move.ply - 1)}
+      onClick={() => onSelect(positionForPly(move.ply))}
       aria-current={isCurrent ? "true" : undefined}
     >
       <span className="san">{move.san}</span>

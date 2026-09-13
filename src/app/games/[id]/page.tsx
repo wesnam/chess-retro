@@ -5,6 +5,7 @@ import { getUsername } from "@/settings/settings";
 import { getGame, listMissedMotifs, listMoves } from "@/games/queries";
 import { AnalyzeButton } from "./AnalyzeButton";
 import { GameReview } from "./GameReview";
+import { positionForPly } from "@/games/position-move";
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +134,9 @@ export function openingPosition(ply: string | string[] | undefined): number {
   if (!/^\d+$/.test(ply)) return 0;
   const parsed = Number(ply);
   if (!Number.isSafeInteger(parsed) || parsed < 1) return 0;
-  return parsed - 1;
+  // The position that ply PRODUCED, so a link to a blunder opens the board
+  // with the blunder played and the cursor on it.
+  return positionForPly(parsed);
 }
 
 function resultLabel(result: string): string {

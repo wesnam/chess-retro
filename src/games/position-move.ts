@@ -33,3 +33,20 @@ export function plyShownAt(positionIndex: number): number | undefined {
 export function plyPlayedFrom(positionIndex: number): number {
   return positionIndex + 1;
 }
+
+/**
+ * The position to open when a link names a ply.
+ *
+ * A dashboard example pointing at the blunder on ply 23 means "show me that
+ * blunder", so it opens the position ply 23 PRODUCED — the board with the move
+ * played, the verdict describing it, and the scoresheet cursor on it.
+ *
+ * It used to open `ply - 1`, the position before, which put the cursor a move
+ * short of the thing the link was about. That was patched by moving the cursor
+ * forward instead, which fixed the link and left the cursor disagreeing with
+ * the board everywhere else — the grid read one turn ahead. Fixing the link is
+ * what lets one convention serve the whole page.
+ */
+export function positionForPly(ply: number): number {
+  return Math.max(0, ply);
+}
