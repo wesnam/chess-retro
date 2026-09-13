@@ -21,6 +21,8 @@ export type AnalysedMove = {
   mateBefore: number | null;
   mateAfter: number | null;
   bestMoveUci: string | undefined;
+  /** The engine's expected continuation from this position, space-separated UCI. */
+  bestLine: string | undefined;
   /** Centipawns the mover threw away. A bad move gives a large positive. */
   cpLoss: number;
   winPctBefore: number;
@@ -114,6 +116,7 @@ export async function analyseGame(
       mateBefore: scoreBefore.kind === "mate" ? scoreBefore.moves : null,
       mateAfter: scoreAfter.kind === "mate" ? scoreAfter.moves : null,
       bestMoveUci: before.bestMove,
+      bestLine: before.bestLine,
       cpLoss: Math.max(0, toCp(scoreBefore) - toCp(scoreAfter)),
       winPctBefore: pctBefore,
       winPctAfter: pctAfter,

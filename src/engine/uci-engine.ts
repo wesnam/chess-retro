@@ -37,6 +37,12 @@ export type EngineOptions = {
 export type PositionAnalysis = {
   /** Best move in UCI notation, or undefined in a finished position. */
   bestMove: string | undefined;
+  /**
+   * The engine's expected continuation, space-separated UCI, beginning with
+   * `bestMove`. The score is the assessment at the END of this line, so
+   * without it the reasoning behind every evaluation is discarded.
+   */
+  bestLine: string | undefined;
   /** Evaluation from the perspective of the side to move. */
   score: Score;
   depth: number;
@@ -157,6 +163,7 @@ export class UciEngine {
 
     let score: Score | undefined;
     let depth = 0;
+    let bestLine: string | undefined;
 
     const collect = (line: string) => {
       if (!line.startsWith("info ")) return;
@@ -164,6 +171,9 @@ export class UciEngine {
       if (parsed) {
         score = parsed.score;
         depth = parsed.depth;
+        // Kept only when present: the deepest line wins, and a line without a
+        // pv must not erase one already captured at the same depth.
+        if (parsed.line) bestLine = parsed.line;
       }
     };
 
@@ -193,6 +203,7 @@ export class UciEngine {
       const move = best.split(/\s+/)[1];
       return {
         bestMove: move && move !== "(none)" ? move : undefined,
+        bestLine,
         score,
         depth,
       };
@@ -298,7 +309,7 @@ export class UciEngine {
  */
 export function parseInfo(
   line: string,
-): { score: Score; depth: number } | undefined {
+): { score: Score; depth: number; line: string | undefined } | undefined {
   // Only the principal variation carries the evaluation we want.
   const multipv = /\bmultipv (\d+)/.exec(line);
   if (multipv && multipv[1] !== "1") return undefined;
@@ -310,11 +321,25 @@ export function parseInfo(
   if (!depthMatch) return undefined;
   const depth = Number(depthMatch[1]);
 
+  // The continuation the engine expects, already computed by the search and
+  // reported at no extra cost. `pv` is always last on the line, so everything
+  // after the marker is the variation.
+  const pvMatch = /\bpv (.+)$/.exec(line);
+  const bestLine = pvMatch?.[1]?.trim() || undefined;
+
   if (mateMatch) {
-    return { score: { kind: "mate", moves: Number(mateMatch[1]) }, depth };
+    return {
+      score: { kind: "mate", moves: Number(mateMatch[1]) },
+      depth,
+      line: bestLine,
+    };
   }
   if (cpMatch) {
-    return { score: { kind: "cp", cp: Number(cpMatch[1]) }, depth };
+    return {
+      score: { kind: "cp", cp: Number(cpMatch[1]) },
+      depth,
+      line: bestLine,
+    };
   }
   return undefined;
 }

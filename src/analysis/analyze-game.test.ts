@@ -25,6 +25,7 @@ function stubEngine(
       return {
         score: entry.score,
         bestMove: entry.bestMove,
+        bestLine: undefined,
         depth,
       };
     },

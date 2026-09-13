@@ -121,6 +121,7 @@ export type MoveRow = {
   mateBefore: number | null;
   mateAfter: number | null;
   bestMoveUci: string | null;
+  bestLine: string | null;
   cpLoss: number | null;
   winPctBefore: number | null;
   winPctAfter: number | null;
@@ -144,6 +145,7 @@ export function listMoves(db: Db, user: string, gameId: string): MoveRow[] {
       mateBefore: moves.mateBefore,
       mateAfter: moves.mateAfter,
       bestMoveUci: moves.bestMoveUci,
+      bestLine: moves.bestLine,
       cpLoss: moves.cpLoss,
       winPctBefore: moves.winPctBefore,
       winPctAfter: moves.winPctAfter,

@@ -29,7 +29,12 @@ function stubEngine(
       const entry = scores[index] ?? scores.at(-1)!;
       index += 1;
       stub.positionsSeen += 1;
-      return { score: entry.score, bestMove: entry.bestMove, depth: 18 };
+      return {
+        score: entry.score,
+        bestMove: entry.bestMove,
+        bestLine: undefined,
+        depth: 18,
+      };
     },
   };
   return stub;
@@ -269,7 +274,7 @@ describe("when analysis fails", () => {
       async analyse() {
         calls += 1;
         if (calls > 2) throw new Error("died mid-game");
-        return { score: cp(10), bestMove: undefined, depth: 18 };
+        return { score: cp(10), bestMove: undefined, bestLine: undefined, depth: 18 };
       },
     };
 

@@ -6,7 +6,11 @@ describe("reading engine info lines", () => {
     const parsed = parseInfo(
       "info depth 16 seldepth 20 multipv 1 score cp 720 nodes 84200 nps 1336507 time 63 pv a8e8",
     );
-    expect(parsed).toEqual({ score: { kind: "cp", cp: 720 }, depth: 16 });
+    expect(parsed).toEqual({
+      score: { kind: "cp", cp: 720 },
+      depth: 16,
+      line: "a8e8",
+    });
   });
 
   it("reads a negative score", () => {
@@ -39,11 +43,30 @@ describe("reading engine info lines", () => {
     expect(parseInfo("info depth 8 score cp 12 pv e2e4")).toBeDefined();
   });
 
+  it("keeps the whole principal variation, not only its first move", () => {
+    // The search computes the continuation anyway and reports it for free.
+    // Keeping only the first move discards the reasoning behind the score —
+    // the evaluation is the assessment at the END of this line.
+    const parsed = parseInfo(
+      "info depth 18 seldepth 23 multipv 1 score cp 1376 nodes 117466 nps 645417 time 182 pv g6c2 e7d6 c2h7 b7b5",
+    );
+    expect(parsed?.line).toBe("g6c2 e7d6 c2h7 b7b5");
+  });
+
+  it("reports no line when the engine sent none", () => {
+    const parsed = parseInfo("info depth 4 score cp 12 nodes 100");
+    expect(parsed?.line).toBeUndefined();
+  });
+
   it("does not mistake other numbers for the score", () => {
     const parsed = parseInfo(
       "info depth 20 seldepth 30 multipv 1 score cp 5 nodes 1000000 nps 500000 hashfull 999 tbhits 0 time 2000 pv e2e4",
     );
-    expect(parsed).toEqual({ score: { kind: "cp", cp: 5 }, depth: 20 });
+    expect(parsed).toEqual({
+      score: { kind: "cp", cp: 5 },
+      depth: 20,
+      line: "e2e4",
+    });
   });
 });
 
@@ -68,6 +91,7 @@ describe("line framing", () => {
     expect(parseInfo(lines[0]!)).toEqual({
       score: { kind: "cp", cp: 720 },
       depth: 16,
+      line: "a8e8",
     });
   });
 });

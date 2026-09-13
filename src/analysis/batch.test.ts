@@ -44,7 +44,7 @@ function stubEngine(
       await options.onGame?.(stub.gamesSeen);
     },
     async analyse(_fen: string) {
-      return { score: cp(10), bestMove: "e2e4", depth: 18 };
+      return { score: cp(10), bestMove: "e2e4", bestLine: undefined, depth: 18 };
     },
   };
   return stub;

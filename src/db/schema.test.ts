@@ -227,6 +227,20 @@ describe("schema", () => {
     raw.close();
   });
 
+  it("carries the engine's principal variation on moves", () => {
+    // The search reports the whole continuation for free; storing only the
+    // first move discarded the reasoning behind every evaluation.
+    const file = tempDbPath();
+    createDb(file);
+    const raw = new Database(file, { readonly: true });
+    const cols = (
+      raw.prepare("PRAGMA table_info(moves)").all() as { name: string }[]
+    ).map((c) => c.name);
+    raw.close();
+
+    expect(cols).toContain("best_line");
+  });
+
   it("carries the analysis owner, so orphan reclaim can tell runs apart", () => {
     const file = tempDbPath();
     createDb(file);
@@ -256,6 +270,7 @@ describe("schema", () => {
     // Pretend this database predates the analysis_owner column.
     seed.exec("ALTER TABLE games DROP COLUMN analysis_owner");
     seed.exec("ALTER TABLE games DROP COLUMN motifs_tagged_at");
+    seed.exec("ALTER TABLE moves DROP COLUMN best_line");
     seed.pragma("user_version = 2");
     seed.close();
 
@@ -269,10 +284,14 @@ describe("schema", () => {
       .prepare("SELECT COUNT(*) AS n FROM games")
       .get() as { n: number };
     const version = raw.pragma("user_version", { simple: true });
+    const moveCols = (
+      raw.prepare("PRAGMA table_info(moves)").all() as { name: string }[]
+    ).map((c) => c.name);
     raw.close();
 
     expect(cols).toContain("analysis_owner");
     expect(cols).toContain("motifs_tagged_at");
+    expect(moveCols, "version 5 adds best_line in place").toContain("best_line");
     expect(n, "the existing game must survive the upgrade").toBe(1);
     // Asserted against the constant, so a later bump does not need this test
     // edited — only its column expectations extended.

@@ -107,6 +107,7 @@ function commit(db: Db, game: StoredGame, analysis: GameAnalysis): void {
           mateBefore: move.mateBefore,
           mateAfter: move.mateAfter,
           bestMoveUci: move.bestMoveUci ?? null,
+          bestLine: move.bestLine ?? null,
           cpLoss: move.cpLoss,
           winPctBefore: move.winPctBefore,
           winPctAfter: move.winPctAfter,

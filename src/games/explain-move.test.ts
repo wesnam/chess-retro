@@ -15,6 +15,7 @@ function move(over: Partial<MoveRow> = {}): MoveRow {
     mateBefore: null,
     mateAfter: null,
     bestMoveUci: "e2e4",
+    bestLine: null,
     cpLoss: 10,
     winPctBefore: 55,
     winPctAfter: 50,

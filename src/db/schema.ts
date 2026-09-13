@@ -131,6 +131,21 @@ export const moves = sqliteTable(
     mateBefore: integer("mate_before"),
     mateAfter: integer("mate_after"),
     bestMoveUci: text("best_move_uci"),
+    /**
+     * The engine's principal variation: the continuation it expects from both
+     * sides, as space-separated UCI moves, starting with `bestMoveUci`.
+     *
+     * The search computes this anyway and reports it at no extra cost, so
+     * keeping only the first move discarded the reasoning behind the score —
+     * the evaluation IS the assessment at the end of this line. Without it an
+     * explanation can only describe what one move does; "this drops a knight
+     * because the fork comes with check two moves later" needs the line.
+     *
+     * It is the engine's EXPECTED line, not a forced sequence. Asserting
+     * "this loses to X then Y" is only honest when the replies are genuinely
+     * forced; otherwise it dresses a plausible continuation up as a proof.
+     */
+    bestLine: text("best_line"),
     /** Centipawns lost by the mover; a bad move yields a large positive value. */
     cpLoss: integer("cp_loss"),
     winPctBefore: real("win_pct_before"),

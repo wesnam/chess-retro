@@ -77,6 +77,13 @@ function migrate(sqlite: Database.Database): void {
   if (existing < 4) {
     addColumnIfMissing(sqlite, "games", "motifs_tagged_at", "INTEGER");
   }
+
+  // Version 5 added moves.best_line. Existing rows keep NULL: the line was
+  // never captured for them, and re-analysing a corpus to backfill it costs
+  // hours. Consumers must treat it as optional.
+  if (existing < 5) {
+    addColumnIfMissing(sqlite, "moves", "best_line", "TEXT");
+  }
 }
 
 /**

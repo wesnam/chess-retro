@@ -12,8 +12,11 @@
  *     rebuilding would throw away a corpus that takes hours to re-analyse.
  * 4 — games.motifs_tagged_at, so a game with no tactics is not re-tagged on
  *     every pass. Also added in place.
+ * 5 — moves.best_line, the engine's principal variation. The search already
+ *     computes it and reports it for free; storing only the first move threw
+ *     away the reasoning behind every evaluation. Added in place.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /**
  * Tables dropped when upgrading from a pre-version-2 database. These hold
@@ -102,6 +105,8 @@ CREATE TABLE IF NOT EXISTS moves (
   mate_before     INTEGER,
   mate_after      INTEGER,
   best_move_uci   TEXT,
+  -- The engine's expected continuation, space-separated UCI. See schema.ts.
+  best_line       TEXT,
   cp_loss         INTEGER,
   win_pct_before  REAL,
   win_pct_after   REAL,
