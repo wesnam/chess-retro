@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { syncOutcomeMessage } from "@/ingest/sync-message";
 
 type SyncResponse = {
   stored?: number;
   skipped?: number;
   unusable?: number;
+  monthsFetched?: string[];
   error?: string;
 };
 
@@ -31,12 +33,12 @@ export function SyncButton({ disabled }: { disabled?: boolean }) {
         return;
       }
 
-      const stored = data.stored ?? 0;
-      const skipped = data.skipped ?? 0;
       setMessage(
-        stored === 0 && skipped > 0
-          ? "Already up to date."
-          : `Downloaded ${stored} new game${stored === 1 ? "" : "s"}.`,
+        syncOutcomeMessage({
+          stored: data.stored ?? 0,
+          skipped: data.skipped ?? 0,
+          monthsFetched: data.monthsFetched ?? [],
+        }),
       );
       router.refresh();
     } catch (error) {

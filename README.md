@@ -28,33 +28,95 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 09 | **Plain-English coaching on each weakness** | ✅ done |
 | 10 | **Puzzle practice matched to weaknesses** | ✅ done |
 | 11 | **Live engine analysis in the browser** | ✅ done |
-| 12 | Incremental sync and release readiness | |
+| 12 | Incremental sync and release readiness | ✅ done |
 
 ## Requirements
 
-- **Node.js 22 or newer** (developed on 25)
-- **Stockfish** — required to analyse games:
-  ```sh
-  brew install stockfish
-  ```
-  Set `STOCKFISH_PATH` if it is not on your `PATH`.
+| | | |
+|---|---|---|
+| **Node.js 22+** | required | developed on 25 |
+| **Stockfish** | required | `brew install stockfish` — analysis cannot run without it |
+| **A chess.com account** | required | only the public username; no password, no API key |
+| **Anthropic API key** | optional | adds written coaching. Everything else works without it — see [Configuration](#configuration) |
+
+Runs entirely on your machine. No account, no server, no data leaves the box — apart from fetching
+your own games from chess.com's public API, and the coaching call if you enable it.
 
 ## Getting started
+
+From a clean clone to your own dashboard. **Budget about an hour**, nearly all of it step 4 running
+unattended.
+
+### 1. Install and start — under a minute
 
 ```sh
 npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>, go to **Settings**, and enter your chess.com username.
+Open <http://localhost:3000>. The database is created for you at `data/chess-retro.db` on first run.
 
-Once games are analysed, each **tactical** weakness on the dashboard links through to puzzles for
-that theme. The first visit offers to download the Lichess puzzle database (public domain, ~300MB);
-after that, practice works with no network connection at all. "Only puzzles near my rating" stores a
-fraction of the file and loses nothing you would ever be served.
+### 2. Install the engine — under a minute
 
-The database is created automatically at `data/chess-retro.db` on first run. It is a single SQLite
-file — back it up by copying it, reset by deleting it.
+```sh
+brew install stockfish     # or your platform's package manager
+```
+
+Stockfish is not bundled: it is GPL, several tens of megabytes, and platform-specific. If it is not
+on your `PATH`, set `STOCKFISH_PATH` to the binary. Nothing needs the engine until step 4, so the app
+starts fine without it — analysis is what fails, with a message saying so.
+
+### 3. Point it at your account — seconds
+
+Go to **Settings**, enter your chess.com username, and choose how many games back to reach (the
+default is 500). Then press **Sync games** on the Games page.
+
+Downloading is fast — games arrive as PGN text, a few seconds per month of history. 500 games is
+typically well under a minute.
+
+### 4. Analyse the corpus — the long one
+
+Press **Analyze all games**. This is the step that takes real time: every position of every game is
+searched by Stockfish to depth 18.
+
+| Corpus | Roughly |
+|--------|---------|
+| 100 games | ~10 minutes |
+| 500 games (the default) | ~50 minutes |
+
+Measured on a 10-core machine at 53s of engine time per game, spread across a pool of 9 engines —
+one core is deliberately left free so the machine stays usable. A slower or smaller machine scales
+about linearly with core count.
+
+You do not have to sit through it. The run is **resumable**: progress, rate and an ETA are shown
+live, **Pause** stops it taking new games, and pressing start again picks up where it left off. A
+crash or a closed laptop loses at most the handful of games actually in flight.
+
+### 5. Read your weaknesses — instant
+
+The dashboard opens on your top 3 recurring weaknesses for a given time control, each with the
+statistic behind it and links to the games where it happened. This is the point of the whole
+exercise, and it is pure database work — no waiting.
+
+### 6. Practise them — optional, ~15 minutes to set up
+
+Each **tactical** weakness links through to puzzles for that theme. The first visit offers to
+download the Lichess puzzle database: **~300MB, over ten minutes**, and the import itself a few
+minutes more. The download resumes if the connection drops. Ticking *"only puzzles near my rating"*
+stores a fraction of the file and loses nothing you would ever be served. Afterwards, practice works
+with no network connection at all.
+
+### Staying current afterwards
+
+Press **Sync games** again whenever you like. It takes **seconds**, not another hour: months already
+fetched in full are skipped without even a request, and only the current month — which is still
+accumulating games — is re-checked. **Analyze all games** then analyses only what the sync brought
+in; the corpus you already paid engine time for is never re-analysed.
+
+Raising the corpus limit in Settings works the same way: the next sync backfills further into your
+history, and only those older games are analysed.
+
+The database is a single SQLite file — back it up by copying it, reset by deleting it.
 
 ## Commands
 
@@ -69,11 +131,43 @@ file — back it up by copying it, reset by deleting it.
 
 ## Configuration
 
+Everything below is optional. With none of it set, the app works: it finds Stockfish on your `PATH`,
+keeps its database under `data/`, and runs every feature except the written coaching.
+
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CHESS_RETRO_DB` | `data/chess-retro.db` | Database location |
-| `STOCKFISH_PATH` | `stockfish` | Engine binary |
-| `ANTHROPIC_API_KEY` | *(unset)* | Enables the coaching prose on the dashboard. Without it the dashboard still ranks and explains your weaknesses from the statistics — the core feature is not gated behind a paid account. Read server-side only; it never reaches the browser. |
+| `CHESS_RETRO_DB` | `data/chess-retro.db` | Where the SQLite file lives. Point it elsewhere to keep several corpora side by side. |
+| `STOCKFISH_PATH` | `stockfish` | The engine binary. Only needed when Stockfish is not on your `PATH`. |
+| `ANTHROPIC_API_KEY` | *(unset)* | Enables the written coaching. Read server-side only; it never reaches the browser. |
+
+Set them in a `.env.local` file at the repository root, or in the environment:
+
+```sh
+STOCKFISH_PATH=/opt/homebrew/bin/stockfish npm run dev
+```
+
+In-app settings — your chess.com username and how many games back to reach — live in the database,
+not in the environment. Change them on the **Settings** page.
+
+### Running without an API key
+
+This is a supported way to use the app, not a degraded one. Without `ANTHROPIC_API_KEY`:
+
+| Feature | Without a key |
+|---------|---------------|
+| Sync, analysis, opening labels | unaffected |
+| Weakness ranking and the dashboard | unaffected — this is the core feature, and it is computed by SQL, not by a model |
+| Every weakness's statistic and example games | unaffected |
+| Puzzle practice | unaffected |
+| Live engine analysis and board exploration | unaffected |
+| Written coaching paragraphs | absent; the ranked weaknesses and their numbers are shown without the prose |
+
+The ranking is deterministic code either way — the model only ever puts the statistics into words, so
+what is lost is phrasing, never a finding. See *The LLM explains; it does not discover* below.
+
+There is nothing to configure to opt out: leave the variable unset. If you set it later, coaching
+appears on the next dashboard load, and the answers are cached against their inputs, so revisiting
+costs nothing.
 
 ## How it works
 
@@ -369,13 +463,48 @@ displaces an older one, and a ten-minute ceiling catches a disconnect that is ne
 - **An exploration is a value, never a mutable board.** Every operation returns a new one. A `Chess`
   instance threaded through React state is shared by reference, so any re-render that replayed a move
   would apply it twice and the board and the engine would disagree about the position.
+- **A complete archive month is never refetched; the current one always is.** `sync_state` records
+  which months were taken in full, and those are skipped without a request — that is what makes a
+  re-sync seconds rather than another backfill. The current month is exempt because it is still
+  accumulating games, and a month cut short by the corpus limit is deliberately left incomplete, or
+  raising the limit later could never reach the games left behind.
+- **Past the corpus limit, sync still accepts games newer than everything held.** Otherwise a full
+  corpus could never pick up the game you played this morning: the limit would stop the walk before
+  reaching it, and dropping the newest game to keep an older one is backwards. The rule is suspended
+  on an empty corpus, where every game is "newer than nothing" and would ignore the limit entirely.
+- **Incremental analysis is a property of the claim, not a separate code path.** The batch job only
+  ever claims games whose `analysis_status` is `pending`, so games the last run finished are invisible
+  to it. Nothing has to remember what was analysed when. `incremental.test.ts` covers the seam
+  between sync and analysis, which is where "seconds, not another overnight run" is actually won.
+- **"Already up to date" is decided on `stored` alone.** The tempting reading — nothing stored but
+  something skipped — breaks on exactly the case that matters: a current corpus fetches no month at
+  all, so `stored` and `skipped` are both zero, and the fallback would report "Downloaded 0 new
+  games" for the commonest sync there is. `sync-message.ts` holds the rule and is directly tested.
 - **Tests are colocated** as `*.test.ts`. Files named `*.slow.test.ts` spawn a real Stockfish binary
   and are excluded from the default run.
 - Vitest 5 prints an engine warning on odd-numbered Node releases such as 25. It runs correctly.
 
 ## Licence
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+**GPL-3.0-or-later.** See [LICENSE](LICENSE) for the full text.
 
-This is a deliberate choice, not an accident: Stockfish and chessground are both GPL, and no
-permissively licensed chess engine exists. See [NOTICE](NOTICE) for dependency and data attributions.
+This is a deliberate choice rather than an accident of copy-and-paste. The engine and the board
+library are both GPL, and no permissively licensed chess engine exists — so a chess analysis tool
+worth using is a GPL work, and saying otherwise would be wrong rather than merely optimistic.
+
+What the app is built from, in short — [NOTICE](NOTICE) carries the full attributions:
+
+| Component | Licence | Role |
+|-----------|---------|------|
+| [Stockfish](https://stockfishchess.org/) | GPL-3.0-or-later | The analysis engine. Installed by you, not bundled here. |
+| [chessground](https://github.com/lichess-org/chessground) | GPL-3.0-or-later | The board, and the "cburnett" piece artwork in its stylesheets. |
+| [chess.js](https://github.com/jhlywa/chess.js) | BSD-2-Clause | Move generation, validation, PGN parsing. |
+| [Lichess puzzle database](https://database.lichess.org/#puzzles) | CC0 1.0 (public domain) | ~6.1M rated, theme-tagged puzzles. Downloaded by you, not redistributed here. |
+| [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) | CC0 1.0 (public domain) | ~3,800 named opening lines, redistributed unmodified in `src/ingest/openings-data/`. |
+| Next.js, React, Drizzle, Vitest | MIT / Apache-2.0 | Framework and tooling. |
+
+Both datasets are public domain and require no attribution. They are credited anyway, because
+knowing where data came from is worth more than the obligation to say so.
+
+Game data comes from chess.com's public read-only API, which needs no key and no authentication —
+only a descriptive `User-Agent`, which the client sends.
