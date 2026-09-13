@@ -1181,7 +1181,7 @@ button.move-slot:hover {
   padding: 0.25rem 0.5rem;
 }
 
-/* No stored evaluation applies to an explored position: the bar says so
+/* Nothing to show yet: off the game line the bar waits on the live search
    rather than keeping the game's number beside a position that is not it. */
 .eval-bar[data-unknown="true"] {
   opacity: 0.3;

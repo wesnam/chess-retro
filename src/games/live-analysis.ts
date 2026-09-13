@@ -110,22 +110,56 @@ export function formatLiveScore(
   score: Score | undefined,
   fen: string,
 ): string {
-  if (!score) return "—";
+  const white = whitePovLiveScore(score, fen);
+  if (!white) return "—";
+
+  if (white.kind === "mate") {
+    // The distance is taken from the ORIGINAL score, not the converted one:
+    // `mate 0` is carried as ±1 so the bar can tell a mated White from a mated
+    // Black, but it is still a mate in zero and must print as one.
+    const distance = score?.kind === "mate" ? Math.abs(score.moves) : 0;
+    return `${white.moves < 0 ? "−" : "+"}M${distance}`;
+  }
+
+  const pawns = white.cp / 100;
+  return `${pawns >= 0 ? "+" : "−"}${Math.abs(pawns).toFixed(2)}`;
+}
+
+/**
+ * A live evaluation converted to White's perspective.
+ *
+ * UCI reports from the side to move, which flips every ply. Anything that
+ * shares a scale with the stored evaluations — the eval bar above all — has to
+ * be fed this rather than the raw score, or it lurches to the other side of
+ * the board on every single move of an explored line.
+ *
+ * The same rule `whitePovScore` applies to stored moves, kept here so the live
+ * path cannot drift from it.
+ */
+export function whitePovLiveScore(
+  score: Score | undefined,
+  fen: string,
+): Score | undefined {
+  if (!score) return undefined;
 
   const sign = sideToMove(fen) === "b" ? -1 : 1;
 
   if (score.kind === "mate") {
-    const moves = score.moves * sign;
-    // `score mate 0` means the side to move is ALREADY checkmated — the worst
-    // score there is, not the best. Multiplying by the sign leaves zero, so
-    // the sign has to come from whose loss it is: reading it off the number
-    // renders `+M0` for both sides and announces a win for whoever just lost.
-    const losing = score.moves === 0 ? sideToMove(fen) === "w" : moves < 0;
-    return `${losing ? "−" : "+"}M${Math.abs(moves)}`;
+    /**
+     * `mate 0` means the side to move is ALREADY checkmated — the worst score
+     * there is, not the best.
+     *
+     * Multiplying by the sign leaves zero either way, and `winPct` reads any
+     * non-positive mate as a certain loss FOR WHITE — so a mated Black would
+     * come back as 0% for White, exactly inverted. Zero is therefore mapped to
+     * a mate distance with a real sign: the mated side is the side to move, so
+     * White to move is White's loss and Black to move is White's win. (A
+     * negative zero would be the tidier spelling and does not survive JSON.)
+     */
+    if (score.moves === 0) return { kind: "mate", moves: sign === 1 ? -1 : 1 };
+    return { kind: "mate", moves: score.moves * sign };
   }
-
-  const pawns = (score.cp * sign) / 100;
-  return `${pawns >= 0 ? "+" : "−"}${Math.abs(pawns).toFixed(2)}`;
+  return { kind: "cp", cp: score.cp * sign };
 }
 
 /**

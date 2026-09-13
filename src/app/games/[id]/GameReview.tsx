@@ -9,6 +9,7 @@ import {
   evalBarFraction,
   whitePovScore,
 } from "@/games/review-model";
+import { whitePovLiveScore } from "@/games/live-analysis";
 import type { MoveRow } from "@/games/queries";
 import { missedSummary } from "@/analysis/motifs/labels";
 import {
@@ -172,24 +173,6 @@ export function GameReview({
   // the game position otherwise.
   const shownFen = exploring?.fen ?? position?.fen;
 
-  /**
-   * Off the game line, every stored number is about a position that is no
-   * longer on the board.
-   *
-   * The eval bar, the score readout, the verdict and the scoresheet cursor all
-   * describe the move that was PLAYED at this index. Leaving them up while an
-   * explored position is shown is the exact failure this project keeps naming:
-   * the board showing one position while the evaluation beside it describes
-   * another. Playing the engine's suggestion and watching the bar not move
-   * reads as the engine contradicting itself.
-   *
-   * So they are withdrawn rather than recomputed. What the explored position
-   * is worth is a question only the engine can answer, and the live panel is
-   * where that answer already appears.
-   */
-  const score = exploring ? undefined : storedScore;
-  const fraction = evalBarFraction(score);
-
   const play = useCallback(
     (from: Key, to: Key) => {
       setExploring((current) => {
@@ -216,6 +199,32 @@ export function GameReview({
   // is the whole point of being able to play a move here.
   const liveState = useLiveAnalysis(shownFen ?? "", engineOn && !!shownFen);
 
+  /**
+   * What the bar and the score readout describe.
+   *
+   * On the game line that is the stored evaluation of the move that led here.
+   * Off it, the stored number is about a position no longer on the board —
+   * "the board showing one position while the evaluation beside it describes
+   * another", which is the failure this project keeps naming. So the live
+   * search takes over: it is analysing exactly what is displayed, and an
+   * explored position moving the bar is the whole point of exploring.
+   *
+   * Converted to White's perspective first. The engine reports from the side
+   * to move, and feeding that to the bar raw would swing it fully across on
+   * every ply of a line.
+   */
+  const liveScore =
+    liveState.status === "thinking" && shownFen
+      ? whitePovLiveScore(liveState.live.score, shownFen)
+      : undefined;
+
+  const score = exploring ? liveScore : storedScore;
+  // Only while off the line AND with nothing to show yet: on the game line a
+  // missing stored evaluation is an unanalysed game, which the bar has always
+  // rendered as level rather than as unknown.
+  const scoreUnknown = !!exploring && !liveScore;
+  const fraction = evalBarFraction(score);
+
   if (!position) return null;
 
   return (
@@ -224,7 +233,7 @@ export function GameReview({
         <EvalBar
           fraction={fraction}
           orientation={review.orientation}
-          unknown={!!exploring}
+          unknown={scoreUnknown}
         />
         <Board
           fen={shownFen ?? position.fen}
@@ -457,10 +466,10 @@ function EvalBar({
   fraction: number;
   orientation: "white" | "black";
   /**
-   * No stored evaluation applies to what is on the board — an explored line.
-   * Greyed rather than left at its last value: a bar that keeps showing the
-   * game's number beside a position that is not the game's is worse than one
-   * that admits it does not know.
+   * Nothing describes what is on the board yet — an explored line whose live
+   * search has not reported. Greyed rather than left at its last value: a bar
+   * still showing the game's number beside a position that is not the game's
+   * is worse than one that admits it does not know.
    */
   unknown?: boolean;
 }) {

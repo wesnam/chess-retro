@@ -185,6 +185,15 @@ sequenceDiagram
     E-->>R: bestmove (drained)
 ```
 
+**The engine is on the server, where the ticket asked for WebAssembly in a browser worker.** A
+deliberate deviation, recorded because it is the kind that looks like an oversight: the native engine
+is stronger, reuses the UCI layer the rest of the app already speaks, and adds no dependency or
+cross-origin isolation headers. What it gives up is the isolation a worker gets for free — the live
+engine is its own process and never queues behind batch work, but it competes for the same cores, so
+live analysis is slower while a batch job runs. Moving to WASM would replace `engine/live.ts`, the
+route and `analyseLive`; the exploration model, the display model and the UI are already independent
+of where the engine lives.
+
 `go infinite` stops for no timer, so the `AbortController` in the browser, the request's `abort` on
 the server and the drained `bestmove` on the engine are one chain — break any link and Stockfish
 keeps searching a position nobody is looking at. Two things besides the disconnect can end a search,
@@ -340,12 +349,23 @@ displaces an older one, and a ten-minute ceiling catches a disconnect that is ne
   while every prop stays identical — and identical dependencies mean the update effect does not
   re-run, so nothing puts it back. `Board` counts moves played on it and depends on that count, so
   the resync happens whether or not the position moved on.
-- **Off the game line, every stored number is withdrawn.** The eval bar greys out and the verdict
-  disappears while a line is being explored, because both describe the move played at that index and
-  neither is about the position on the board. Leaving them up is precisely "the board showing one
-  position while the evaluation beside it describes another" — and playing the engine's own
-  suggestion only to watch the bar not move reads as the engine contradicting itself. The scoresheet
-  cursor deliberately stays: it marks where the line branched from.
+- **Off the game line, the live search drives the bar and the stored verdict withdraws.** Both the
+  bar and the verdict describe the move played at that index, and neither is about an explored
+  position — leaving the stored ones up is precisely "the board showing one position while the
+  evaluation beside it describes another". But the bar is not simply dropped: the live search is
+  analysing exactly what is displayed, so it takes over, and watching the bar move as you try a line
+  is the point of trying it. It greys only until the first evaluation arrives. The verdict has no
+  live equivalent and so disappears; the scoresheet cursor deliberately stays, marking where the
+  line branched from.
+- **The live score is converted to White's perspective before it reaches the bar.** UCI reports from
+  the side to move, which flips every ply: a position where White is a queen up reads `+927` with
+  White to move and `-897` with Black to move (verified against the engine directly). Fed to the bar
+  raw, it would swing fully across the board on every move of an explored line. `whitePovLiveScore`
+  is the live counterpart of `whitePovScore`, kept beside it so the two cannot drift.
+- **`score mate 0` needs a sign the number cannot carry.** It means the side to move is already
+  checkmated, and multiplying zero by the perspective sign leaves zero — while `winPct` reads any
+  non-positive mate as a loss *for White*, so a mated Black would empty the bar instead of filling
+  it. The mated side is the side to move, so the sign comes from that.
 - **An exploration is a value, never a mutable board.** Every operation returns a new one. A `Chess`
   instance threaded through React state is shared by reference, so any re-render that replayed a move
   would apply it twice and the board and the engine would disagree about the position.

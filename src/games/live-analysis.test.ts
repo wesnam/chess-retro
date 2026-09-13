@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { evalBarFraction } from "./review-model";
 import {
   applyInfo,
   emptyLive,
@@ -6,6 +7,7 @@ import {
   formatLiveScore,
   principalVariationSan,
   numberVariation,
+  whitePovLiveScore,
 } from "./live-analysis";
 
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -143,5 +145,50 @@ describe("numbering a variation", () => {
 
   it("has nothing to write for an empty line", () => {
     expect(numberVariation([], WHITE_TO_MOVE)).toBe("");
+  });
+});
+
+describe("the live evaluation in White's perspective", () => {
+  const WHITE_TO_MOVE = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  const BLACK_TO_MOVE = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+
+  it("passes a White-to-move score through unchanged", () => {
+    expect(whitePovLiveScore({ kind: "cp", cp: 34 }, WHITE_TO_MOVE)).toEqual({
+      kind: "cp",
+      cp: 34,
+    });
+  });
+
+  it("flips a Black-to-move score, which the bar reads as White's", () => {
+    // UCI reports from the side to move. Feeding that to the bar raw would
+    // make it lurch to the other side on every single ply.
+    expect(whitePovLiveScore({ kind: "cp", cp: 34 }, BLACK_TO_MOVE)).toEqual({
+      kind: "cp",
+      cp: -34,
+    });
+  });
+
+  it("flips a mate distance too", () => {
+    expect(whitePovLiveScore({ kind: "mate", moves: 3 }, BLACK_TO_MOVE)).toEqual({
+      kind: "mate",
+      moves: -3,
+    });
+  });
+
+  it("reads mate 0 as a loss for whoever is to move, so the bar fills the right way", () => {
+    // `mate 0` is the side to move being ALREADY checkmated. Multiplying by
+    // the sign leaves zero either way, and winPct reads a non-positive mate as
+    // White losing — so a mated BLACK would empty the bar instead of filling
+    // it. The mated side is the side to move, so the sign comes from that.
+    expect(
+      evalBarFraction(whitePovLiveScore({ kind: "mate", moves: 0 }, WHITE_TO_MOVE)),
+    ).toBe(0);
+    expect(
+      evalBarFraction(whitePovLiveScore({ kind: "mate", moves: 0 }, BLACK_TO_MOVE)),
+    ).toBe(1);
+  });
+
+  it("has no opinion before the engine has said anything", () => {
+    expect(whitePovLiveScore(undefined, WHITE_TO_MOVE)).toBeUndefined();
   });
 });
