@@ -53,6 +53,41 @@ export function GameReview({
     [lastPosition],
   );
 
+  /**
+   * Positions the user should actually look at: their own inaccuracies,
+   * mistakes and blunders.
+   *
+   * A 60-move game has 61 positions and no reason to step through all of
+   * them. Stored as the position the error was played FROM — ply N is chosen
+   * at position N-1 — matching where the best-move arrow is drawn.
+   */
+  const mistakePositions = useMemo(
+    () =>
+      moves
+        .filter(
+          (move) =>
+            move.isUserMove &&
+            move.classification !== null &&
+            ["inaccuracy", "mistake", "blunder"].includes(move.classification),
+        )
+        .map((move) => move.ply - 1)
+        .sort((a, b) => a - b),
+    [moves],
+  );
+
+  const jumpToMistake = useCallback(
+    (direction: 1 | -1) => {
+      setIndex((current) => {
+        const next =
+          direction === 1
+            ? mistakePositions.find((p) => p > current)
+            : [...mistakePositions].reverse().find((p) => p < current);
+        return next ?? current;
+      });
+    },
+    [mistakePositions],
+  );
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       // Leave typing alone: arrow keys inside a field belong to the field.
@@ -70,6 +105,9 @@ export function GameReview({
       const actions: Record<string, () => void> = {
         ArrowLeft: () => step(-1),
         ArrowRight: () => step(1),
+        // The review shortcut: skip straight to what went wrong.
+        n: () => jumpToMistake(1),
+        p: () => jumpToMistake(-1),
       };
 
       const action = actions[event.key];
@@ -84,7 +122,7 @@ export function GameReview({
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, lastPosition]);
+  }, [step, lastPosition, jumpToMistake]);
 
   const position = review.positions[index];
   // The evaluation shown is the one for the move that LED to this position.
@@ -115,6 +153,8 @@ export function GameReview({
           last={lastPosition}
           onStep={step}
           onJump={setIndex}
+          onJumpToMistake={jumpToMistake}
+          mistakeCount={mistakePositions.length}
           score={score}
         />
         {/*
@@ -176,30 +216,53 @@ function ReviewControls({
   last,
   onStep,
   onJump,
+  onJumpToMistake,
+  mistakeCount,
   score,
 }: {
   index: number;
   last: number;
   onStep: (delta: number) => void;
   onJump: (index: number) => void;
+  onJumpToMistake: (direction: 1 | -1) => void;
+  mistakeCount: number;
   score: ReturnType<typeof whitePovScore>;
 }) {
   return (
-    <div className="review-controls">
-      <button onClick={() => onJump(0)} disabled={index === 0} aria-label="First position">
-        ⏮
-      </button>
-      <button onClick={() => onStep(-1)} disabled={index === 0} aria-label="Previous move">
-        ◀
-      </button>
-      <span className="review-eval">{formatScore(score)}</span>
-      <button onClick={() => onStep(1)} disabled={index === last} aria-label="Next move">
-        ▶
-      </button>
-      <button onClick={() => onJump(last)} disabled={index === last} aria-label="Last position">
-        ⏭
-      </button>
-    </div>
+    <>
+      <div className="review-controls">
+        <button onClick={() => onJump(0)} disabled={index === 0} aria-label="First position">
+          ⏮
+        </button>
+        <button onClick={() => onStep(-1)} disabled={index === 0} aria-label="Previous move">
+          ◀
+        </button>
+        <span className="review-eval">{formatScore(score)}</span>
+        <button onClick={() => onStep(1)} disabled={index === last} aria-label="Next move">
+          ▶
+        </button>
+        <button onClick={() => onJump(last)} disabled={index === last} aria-label="Last position">
+          ⏭
+        </button>
+      </div>
+
+      {/*
+        The reason anyone opens a game they already played: find the moves
+        that went wrong. Stepping through sixty positions to reach them is the
+        difference between a review tool and a replay.
+      */}
+      {mistakeCount > 0 && (
+        <div className="mistake-nav">
+          <button onClick={() => onJumpToMistake(-1)}>
+            ← Previous mistake
+          </button>
+          <span className="mistake-count">
+            {mistakeCount} of your moves went wrong
+          </span>
+          <button onClick={() => onJumpToMistake(1)}>Next mistake →</button>
+        </div>
+      )}
+    </>
   );
 }
 

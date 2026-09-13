@@ -5,6 +5,7 @@ import { countGames } from "@/games/queries";
 import { weaknessReport, type RankedWeakness } from "@/weakness/report";
 import { MIN_GAMES, MIN_OPPORTUNITIES } from "@/weakness/score";
 import type { WeaknessExample } from "@/weakness/queries";
+import { weaknessCopy } from "@/weakness/copy";
 import { TimeClassFilter } from "./TimeClassFilter";
 
 // Reads live database state on every request.
@@ -147,42 +148,56 @@ function NoWeaknesses({
 }
 
 function WeaknessCard({ weakness }: { weakness: RankedWeakness }) {
+  const copy = weaknessCopy(weakness);
   const rate = Math.round(weakness.failureRate * 100);
+  const peers =
+    weakness.referenceMissRate !== undefined
+      ? Math.round(weakness.referenceMissRate * 100)
+      : undefined;
 
   return (
     <div className="weakness card">
       <div className="weakness-head">
-        <h2>{weakness.label}</h2>
+        <h2>{copy.title}</h2>
         <span className={`dimension ${weakness.dimension}`}>
           {dimensionName(weakness.dimension)}
         </span>
       </div>
 
+      {copy.explanation && <p className="weakness-what">{copy.explanation}</p>}
+
+      {/* The comparison, as a sentence rather than a lone multiple. */}
+      <p className="weakness-claim">
+        {peers !== undefined ? (
+          <>
+            You get it wrong <strong>{rate}%</strong> of the time. Players at
+            your rating: <strong>{peers}%</strong>.
+          </>
+        ) : (
+          <>
+            You get it wrong <strong>{rate}%</strong> of the time —{" "}
+            <strong>{weakness.lift.toFixed(1)}×</strong> what an average move of
+            yours costs.
+          </>
+        )}
+      </p>
+
       <dl className="weakness-stats">
-        <Stat label="Opportunities" value={weakness.opportunities.toLocaleString()} />
-        <Stat label="Went wrong" value={`${weakness.failures.toLocaleString()} (${rate}%)`} />
+        <Stat label="Chances" value={weakness.opportunities.toLocaleString()} />
+        <Stat label="Got it wrong" value={weakness.failures.toLocaleString()} />
         <Stat
           label="Win probability lost"
           value={`${Math.round(weakness.winPctLost).toLocaleString()} pts`}
         />
-        {weakness.referenceMissRate !== undefined ? (
-          <Stat
-            label="Players at your level"
-            value={`${Math.round(weakness.referenceMissRate * 100)}% miss it`}
-            note={`you ${rate}% — ${rate - Math.round(weakness.referenceMissRate * 100)} points worse`}
-          />
-        ) : (
-          <Stat
-            label="Versus your average"
-            value={`${weakness.lift.toFixed(1)}×`}
-            note={`${weakness.severity.toFixed(1)} pts per opportunity`}
-          />
-        )}
+        <Stat
+          label="Seen across"
+          value={`${weakness.games} game${weakness.games === 1 ? "" : "s"}`}
+        />
       </dl>
 
       {weakness.examples.length > 0 && (
         <div className="weakness-examples">
-          <h3>From your own games</h3>
+          <h3>See it in your own games</h3>
           <ul>
             {weakness.examples.map((example) => (
               <li key={`${example.gameId}:${example.ply}`}>

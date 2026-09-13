@@ -772,3 +772,63 @@ button.move-slot:hover {
   font-variant-numeric: tabular-nums;
   color: var(--loss, #c0392b);
 }
+
+/* --- Plain-English weakness cards --- */
+
+.weakness-head h2 {
+  font-size: 1.3rem;
+  line-height: 1.25;
+}
+
+.weakness-what {
+  margin: 0 0 0.9rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+.weakness-claim {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.weakness-claim strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Jump to the moves that went wrong --- */
+
+.mistake-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0.9rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  flex-wrap: wrap;
+}
+
+.mistake-nav button {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mistake-nav button:hover {
+  border-color: var(--accent);
+}
+
+.mistake-count {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
