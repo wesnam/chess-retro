@@ -431,6 +431,15 @@ displaces an older one, and a ten-minute ceiling catches a disconnect that is ne
   reached after ply N. The board, the evaluation bar, the scoresheet and the graph all address
   positions by that single number — keeping them on one index is what stops the board showing one
   position while the evaluation beside it describes another.
+- **A position has a move behind it and a move ahead of it, and they are different plies.**
+  `positions[i]` is built from `moves[i].fenBefore`, so position N shows the result of ply N — the
+  move BEHIND it — which is what the verdict, the eval bar and the last-move highlight describe. The
+  best-move arrow and the scoresheet cursor point at ply N+1, the move played FROM here, which is
+  deliberate: the arrow answers "what should I play now" and the cursor marks where a dashboard link
+  landed. Both are right; confusing them is not. `position-move.ts` names the two apart
+  (`plyShownAt`, `plyPlayedFrom`) because the verdict pane had drifted onto the wrong one and spent
+  every position describing the reply to the move on screen — including rating White's opening move
+  beside an untouched starting board.
 - **Stored rows hold the position *before* each move**, so a game of P plies yields P positions and
   the final one has to be played out from the last row — otherwise the board can never show how the
   game actually ended.

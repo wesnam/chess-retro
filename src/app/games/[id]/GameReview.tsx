@@ -10,6 +10,7 @@ import {
   whitePovScore,
 } from "@/games/review-model";
 import { whitePovLiveScore } from "@/games/live-analysis";
+import { plyShownAt } from "@/games/position-move";
 import type { MoveRow } from "@/games/queries";
 import { missedSummary } from "@/analysis/motifs/labels";
 import {
@@ -169,6 +170,20 @@ export function GameReview({
   const currentMove = moves.find((move) => move.ply === index);
   const storedScore = currentMove ? whitePovScore(currentMove) : undefined;
 
+  /**
+   * The ply the verdict pane describes: the move that PRODUCED this position.
+   *
+   * `positions[i]` is built from `moves[i].fenBefore`, so position 1 is the
+   * board after ply 1 — and the verdict beside it has to be about ply 1. It
+   * previously looked up `index + 1`, one move ahead of the board: at the
+   * starting position that rated White's opening move before it was played,
+   * and at every position after it described the reply to the move on screen.
+   *
+   * Undefined at position 0, where nothing has been played and there is
+   * nothing to rate.
+   */
+  const verdictPly = plyShownAt(index);
+
   // What the board is actually showing: the explored line when there is one,
   // the game position otherwise.
   const shownFen = exploring?.fen ?? position?.fen;
@@ -279,19 +294,32 @@ export function GameReview({
           />
         )}
         {/*
-          The tactic was available at the position the ply was played FROM,
-          which is position index + 1 in ply terms. Keyed off `index + 1` so
-          the note appears on the same position as the best-move arrow rather
-          than one step after it.
+          The verdict and the missed-tactic note are about the move that
+          PRODUCED this position — the one whose result is on the board. See
+          `verdictPly`: looking a ply ahead instead described the reply to the
+          move on screen, and rated White's opening move on the untouched
+          starting position.
         */}
         <MoveVerdict
           // Withdrawn off the game line: it accuses the reader of a move that
           // is not playable from the position they are looking at.
-          move={exploring ? undefined : moves.find((m) => m.ply === index + 1)}
+          move={
+            exploring || verdictPly === undefined
+              ? undefined
+              : moves.find((m) => m.ply === verdictPly)
+          }
           // The following ply's stored line is the engine's refutation of
           // this move — what the opponent does about it.
-          next={moves.find((m) => m.ply === index + 2)}
-          missed={exploring ? undefined : missedMotifs[index + 1]}
+          next={
+            verdictPly === undefined
+              ? undefined
+              : moves.find((m) => m.ply === verdictPly + 1)
+          }
+          missed={
+            exploring || verdictPly === undefined
+              ? undefined
+              : missedMotifs[verdictPly]
+          }
           analysed={analysed}
         />
         {/*
