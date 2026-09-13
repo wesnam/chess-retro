@@ -24,7 +24,7 @@ import type { InsightRequest } from "./request";
  * must ALSO appear in the request to survive (see `validateCoaching`) — being
  * a real motif is not the same as being this player's problem.
  */
-const PRACTICE_THEMES = [
+export const PRACTICE_THEMES = [
   "fork",
   "pin",
   "skewer",
@@ -39,7 +39,7 @@ const PRACTICE_THEMES = [
   "mateIn1",
 ] as const satisfies readonly Motif[];
 
-const KNOWN_THEMES: ReadonlySet<string> = new Set(PRACTICE_THEMES);
+export const KNOWN_THEMES: ReadonlySet<string> = new Set(PRACTICE_THEMES);
 
 export type CoachedWeakness = {
   /** A "dimension:key" id from the request; anything else was dropped. */

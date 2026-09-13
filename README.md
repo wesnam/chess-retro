@@ -26,7 +26,7 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 07 | Tag moves with tactical motifs | ✅ done |
 | 08 | **Dashboard ranking your top weaknesses** | ✅ done |
 | 09 | **Plain-English coaching on each weakness** | ✅ done |
-| 10 | Puzzle practice matched to weaknesses | |
+| 10 | **Puzzle practice matched to weaknesses** | ✅ done |
 | 11 | Live engine analysis in the browser | |
 | 12 | Incremental sync and release readiness | |
 
@@ -48,6 +48,11 @@ npm run dev
 
 Open <http://localhost:3000>, go to **Settings**, and enter your chess.com username.
 
+Once games are analysed, each **tactical** weakness on the dashboard links through to puzzles for
+that theme. The first visit offers to download the Lichess puzzle database (public domain, ~300MB);
+after that, practice works with no network connection at all. "Only puzzles near my rating" stores a
+fraction of the file and loses nothing you would ever be served.
+
 The database is created automatically at `data/chess-retro.db` on first run. It is a single SQLite
 file — back it up by copying it, reset by deleting it.
 
@@ -59,7 +64,7 @@ file — back it up by copying it, reset by deleting it.
 | `npm run build` | Production build |
 | `npm start` | Production server (run this rather than deploying serverless — the engine pool lives in module scope) |
 | `npm test` | Test suite |
-| `npm run test:slow` | Tests that spawn a real Stockfish — run these whenever the engine layer changes |
+| `npm run test:slow` | Tests that hit the network or spawn a real Stockfish — run these whenever the engine or the puzzle importer changes |
 | `npm run typecheck` | TypeScript, no emit |
 
 ## Configuration
@@ -87,6 +92,8 @@ flowchart TB
     I --> K[LLM coach<br/>stats + exemplars → prose]
     I --> L[Puzzle matcher<br/>themes ∩ rating band]
     M[(Lichess CC0<br/>puzzle DB)] --> L
+    L --> N[Practice board<br/>same component as review]
+    N --> O[(SQLite: puzzle_attempts)]
 ```
 
 Two design points worth knowing:
@@ -137,6 +144,21 @@ if their data never mentioned it. One invented claim costs that paragraph, not t
 
 **Time control is a filter, never an aggregation axis.** A blitz blunder and a rapid blunder are
 different problems with different remedies. Averaging them describes a player who does not exist.
+
+**Practice closes the loop.** A weakness that is a tactic links straight through to puzzles for that
+theme, because motif names are Lichess's own theme strings and the match is a direct lookup. Puzzles
+come from the Lichess database — public domain, downloaded once, then used entirely offline.
+
+```mermaid
+flowchart LR
+    A[database.lichess.org<br/>300MB .csv.zst] -->|streamed, resumable| B[decompressZstdFrames<br/>skippable + multi-frame]
+    B --> C[readline]
+    C --> D[parsePuzzleRow]
+    D -->|popularity ≥ 70<br/>optional rating band| E[batches of 5,000]
+    E -->|one transaction each| F[(puzzles +<br/>puzzle_themes)]
+    F --> G[selectPuzzles<br/>theme ∩ band ∩ unattempted]
+    G --> H[Board, playable]
+```
 
 ## Development notes
 
@@ -204,6 +226,48 @@ different problems with different remedies. Averaging them describes a player wh
 - **Stored rows hold the position *before* each move**, so a game of P plies yields P positions and
   the final one has to be played out from the last row — otherwise the board can never show how the
   game actually ended.
+- **The Lichess puzzle file needs its own decompressor.** It is not one zstd stream: it is a sequence
+  of frames, each preceded by a *skippable* frame, repeating every ~9MB across the whole 300MB.
+  `node:zlib` mishandles both halves — it rejects a skippable frame outright ("Unknown frame
+  descriptor"), and it stops after the FIRST compressed frame while reporting a clean end of stream.
+  The second is the dangerous one: the import succeeds, logs nothing, and stores 181,225 rows of 6.1
+  million. `src/puzzles/zstd.ts` splits the frames and decompresses them one at a time.
+- **Frame boundaries come from `bytesWritten`, never from scanning for the magic bytes.** The magic
+  sequence occurs inside compressed data often enough to matter: a scanning implementation split the
+  first frame early and turned 800,455 rows into 164,238, silently. The decompressor stops at the end
+  of a frame and reports exactly how many bytes it consumed, which is authoritative.
+- **A frame's output is pushed through in chunks, not concatenated.** Each frame decompresses to
+  ~30MB and `Buffer.concat` holds both the parts and the join; on the real file that peaked at 1.8GB
+  for output that is read line by line anyway. Streaming it through costs ~600MB instead — one
+  buffered compressed frame plus its decompressed chunks. RSS during an import swings much higher
+  than that, to several GB: those are short-lived buffers V8 has not bothered to collect, and forcing
+  a collection brings it back to ~600MB with a 5MB heap every time. It is GC lag, not a leak.
+- **An incomplete frame is not retried on every chunk.** A frame is only complete once its last byte
+  arrives and the only way to find out is to try, so a naive retry decompresses a 9MB frame from the
+  top over a hundred times. Waiting for 512KB of new input between attempts took the 40MB sample from
+  10.1s to 1.7s.
+- **The puzzle download resumes.** It takes over ten minutes, and the first full run died with
+  `ECONNRESET` at minute eleven. A dropped connection re-requests with a `Range` header from the byte
+  it reached. Bytes are counted from the web stream's own reader rather than a Node wrapper — a
+  wrapper reads ahead, so bytes buffered when the connection dropped would be counted as received and
+  never yielded, and the resumed request would start past them.
+- **Puzzles are filtered at import, not at selection.** Popularity below 70 is dropped on the way in,
+  and the import can be restricted to a rating band. Storing six million rows to serve a few thousand
+  is a footprint nobody needs.
+- **Only a `motif` weakness can be practised.** The gate is `dimension === "motif"`, never a bare key
+  lookup: a `phase` weakness has the key `opening` or `endgame`, and BOTH are real Lichess puzzle
+  themes. Matching on the key alone would serve endgame puzzles for a weakness about how someone
+  handles endgames — a different claim — and the page would look like it was working.
+- **A chessground board must be created with the interactivity it will have.**
+  `bindBoard` attaches the mousedown and touchstart listeners and returns early when `viewOnly` is
+  set — and it runs only at construction. Turning `viewOnly` off later through `api.set()` changes the
+  flag but cannot retroactively bind anything, so a board built view-only renders the position, shows
+  its legal moves, and silently ignores every click. The whole practice feature was dead this way
+  while all of its tests passed, because they cover the pure modules and never mount a board.
+  `board-interactivity.test.ts` drives real chessground against jsdom to keep it caught.
+- **The stored puzzle FEN is one move too early, always.** The position is the one before the
+  opponent's setup move, so `movesUci[0]` must be applied before display. `openPuzzle` is the only
+  place allowed to read the stored FEN, so no caller can forget.
 - **Tests are colocated** as `*.test.ts`. Files named `*.slow.test.ts` spawn a real Stockfish binary
   and are excluded from the default run.
 - Vitest 5 prints an engine warning on odd-numbered Node releases such as 25. It runs correctly.

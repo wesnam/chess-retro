@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { motifLabel } from "@/analysis/motifs/labels";
 
 /**
  * The coach's prose, fetched after the statistics are already on screen.
@@ -102,7 +104,20 @@ export function CoachNote({
   );
 }
 
-export function PracticePlan({ coaching }: { coaching: CoachingState }) {
+/**
+ * The coach's practice plan, with each theme linking through to puzzles.
+ *
+ * Every theme here has already passed both gates in `validate.ts` — a motif a
+ * detector can emit AND one this player was measured on — so each is a theme
+ * the puzzle lookup will find material for.
+ */
+export function PracticePlan({
+  coaching,
+  timeClass,
+}: {
+  coaching: CoachingState;
+  timeClass: string;
+}) {
   if (coaching.status !== "ready" || !coaching.practice) return null;
 
   return (
@@ -112,8 +127,13 @@ export function PracticePlan({ coaching }: { coaching: CoachingState }) {
       {coaching.practice.themes.length > 0 && (
         <ul className="practice-themes">
           {coaching.practice.themes.map((theme) => (
-            <li key={theme} className="tag">
-              {theme}
+            <li key={theme}>
+              <Link
+                href={`/practice?theme=${encodeURIComponent(theme)}&tc=${encodeURIComponent(timeClass)}`}
+                className="tag practice-tag"
+              >
+                {motifLabel(theme)}
+              </Link>
             </li>
           ))}
         </ul>

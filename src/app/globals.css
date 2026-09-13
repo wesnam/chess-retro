@@ -1025,3 +1025,73 @@ button.move-slot:hover {
   padding: 0;
   list-style: none;
 }
+
+/* ---------------------------------------------------------------- practice */
+
+/*
+ * The practice link on a weakness card: the step from "this is what you keep
+ * getting wrong" to doing something about it, so it reads as an action rather
+ * than another statistic.
+ */
+.weakness-practice {
+  margin: 1rem 0 0;
+}
+
+.practice-link {
+  display: inline-block;
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.practice-link:hover {
+  filter: brightness(1.08);
+}
+
+/* A theme in the coach's plan, which links through to the same puzzles. */
+.practice-tag {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.practice-tag:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/*
+ * Laid out like the review screen, and deliberately so: the board is the same
+ * component in the same place, so a position looks identical whether it is
+ * being reviewed or solved.
+ */
+.practice-session {
+  display: grid;
+  grid-template-columns: auto minmax(260px, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 1.25rem;
+}
+
+.practice-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.practice-prompt {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.practice-session .weakness-stats {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .practice-session {
+    grid-template-columns: 1fr;
+  }
+}

@@ -26,9 +26,11 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "jsdom": "^29.1.1",
     "typescript": "^5.9.0",
     "vitest": "^5.0.0"
   }

@@ -5,6 +5,7 @@ import type { RankedWeakness } from "@/weakness/report";
 import { weaknessId } from "@/insights/request";
 import type { WeaknessExample } from "@/weakness/queries";
 import { weaknessCopy } from "@/weakness/copy";
+import { practiceTheme } from "@/puzzles/theme";
 import {
   CoachNote,
   PracticePlan,
@@ -30,11 +31,15 @@ export function WeaknessList({
 
   return (
     <>
-      <PracticePlan coaching={coaching} />
+      <PracticePlan coaching={coaching} timeClass={timeClass} />
       <ol className="weakness-list">
         {weaknesses.map((weakness) => (
           <li key={weaknessId(weakness)}>
-            <WeaknessCard weakness={weakness} coaching={coaching} />
+            <WeaknessCard
+              weakness={weakness}
+              coaching={coaching}
+              timeClass={timeClass}
+            />
           </li>
         ))}
       </ol>
@@ -45,11 +50,17 @@ export function WeaknessList({
 function WeaknessCard({
   weakness,
   coaching,
+  timeClass,
 }: {
   weakness: RankedWeakness;
   coaching: CoachingState;
+  timeClass: string;
 }) {
   const copy = weaknessCopy(weakness);
+  // Only a tactic can be drilled. A phase or opening weakness is real but has
+  // no puzzle theme behind it, so it gets no practice link rather than one
+  // that would serve puzzles about something else.
+  const theme = practiceTheme(weakness);
   const rate = Math.round(weakness.failureRate * 100);
   const peers =
     weakness.referenceMissRate !== undefined
@@ -97,6 +108,17 @@ function WeaknessCard({
           value={`${weakness.games} game${weakness.games === 1 ? "" : "s"}`}
         />
       </dl>
+
+      {theme && (
+        <p className="weakness-practice">
+          <Link
+            href={`/practice?theme=${encodeURIComponent(theme)}&tc=${encodeURIComponent(timeClass)}`}
+            className="practice-link"
+          >
+            Practise {copy.title.replace(/^You miss /, "")} →
+          </Link>
+        </p>
+      )}
 
       {weakness.examples.length > 0 && (
         <div className="weakness-examples">
