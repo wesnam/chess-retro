@@ -3,9 +3,15 @@ import type { ReferenceRate } from "./reference";
 /**
  * Peer miss rates for the ~600-rated rapid band.
  *
- * Measured from 127 analysed games across 5 chess.com players rated 596-682,
- * drawn from opponents the first user actually faced. 4,553 tactical
+ * Measured from 270 analysed games across 9 chess.com players rated 596-682,
+ * drawn from opponents the first user actually faced. 9,239 tactical
  * opportunities in total.
+ *
+ * Cohort size matters more than it looks. At 5 players `discoveredAttack` read
+ * 6.4% off 172 opportunities; at 9 it reads 10.7% off 346, which moved one
+ * player's headline weakness from first place to fourth. Rates drawn from a
+ * few hundred sightings are not yet stable — widen the cohort before trusting
+ * a narrow gap.
  *
  * Baked in rather than computed on demand so a fresh install ranks against
  * peers immediately, without first analysing a cohort of strangers' games —
@@ -21,13 +27,14 @@ import type { ReferenceRate } from "./reference";
  * against the wrong population — see `referenceRates` for rebuilding.
  */
 export const RAPID_600_REFERENCE: ReferenceRate[] = [
-  { motif: "hangingPiece", opportunities: 1070, failures: 62, missRate: 0.058, players: 5 },
-  { motif: "quietMove", opportunities: 1020, failures: 157, missRate: 0.154, players: 5 },
-  { motif: "pin", opportunities: 765, failures: 115, missRate: 0.150, players: 5 },
-  { motif: "fork", opportunities: 413, failures: 69, missRate: 0.167, players: 5 },
-  { motif: "skewer", opportunities: 386, failures: 63, missRate: 0.163, players: 5 },
-  { motif: "trappedPiece", opportunities: 262, failures: 55, missRate: 0.210, players: 5 },
-  { motif: "deflection", opportunities: 255, failures: 28, missRate: 0.110, players: 5 },
-  { motif: "sacrifice", opportunities: 210, failures: 35, missRate: 0.167, players: 5 },
-  { motif: "discoveredAttack", opportunities: 172, failures: 11, missRate: 0.064, players: 5 },
+  { motif: "hangingPiece", opportunities: 2199, failures: 144, missRate: 0.065, players: 9 },
+  { motif: "quietMove", opportunities: 1998, failures: 351, missRate: 0.176, players: 9 },
+  { motif: "pin", opportunities: 1488, failures: 215, missRate: 0.144, players: 9 },
+  { motif: "fork", opportunities: 831, failures: 142, missRate: 0.171, players: 9 },
+  { motif: "skewer", opportunities: 815, failures: 127, missRate: 0.156, players: 9 },
+  { motif: "trappedPiece", opportunities: 554, failures: 95, missRate: 0.171, players: 9 },
+  { motif: "deflection", opportunities: 539, failures: 49, missRate: 0.091, players: 9 },
+  { motif: "sacrifice", opportunities: 385, failures: 75, missRate: 0.195, players: 9 },
+  { motif: "discoveredAttack", opportunities: 346, failures: 37, missRate: 0.107, players: 9 },
+  { motif: "mateIn1", opportunities: 76, failures: 6, missRate: 0.079, players: 9 },
 ];
