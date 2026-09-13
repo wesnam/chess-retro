@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The floor better-sqlite3 sets, which is the binding constraint.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # The default suite only. `*.slow.test.ts` spawns a real Stockfish and
+      # downloads from Lichess; neither belongs in CI.
+      - run: npm test
+
+      - run: npm run build

@@ -36,6 +36,15 @@ describe("the cohort caveat", () => {
     expect(caveat?.toLowerCase()).toContain("weaker");
   });
 
+  it("quotes the tolerated range too, not only the measured cohort", () => {
+    // Someone at 770 is told nothing at all, despite being well above the
+    // strongest player measured. A reader deciding whether to trust the
+    // ranking needs to know where the line actually falls.
+    const caveat = fitCaveat({ applies: false, reason: "above-band" }, 1500);
+    expect(caveat).toContain("496");
+    expect(caveat).toContain("782");
+  });
+
   it("explains that the cohort is rapid-only for another time control", () => {
     const caveat = fitCaveat({ applies: false, reason: "other-time-class" }, 640);
 

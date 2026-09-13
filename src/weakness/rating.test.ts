@@ -22,6 +22,7 @@ function seed(options: {
   endTime: number;
   timeClass?: string;
   user?: string;
+  rated?: boolean;
 }) {
   db.insert(games)
     .values({
@@ -32,7 +33,7 @@ function seed(options: {
       userColor: "w",
       userResult: "win",
       endTime: options.endTime,
-      rated: true,
+      rated: options.rated ?? true,
       userRating: options.rating,
       analysisStatus: "done",
     })
@@ -79,6 +80,21 @@ describe("the player's typical rating", () => {
     seed({ rating: 600, endTime: 100 });
     seed({ rating: null, endTime: 200 });
     expect(typicalRating(db, { user: "alice", timeClass: "rapid" })).toBe(600);
+  });
+
+  it("ignores unrated games, whose rating says nothing about strength", () => {
+    // An unrated game carries whatever rating happened to be attached to it,
+    // and it did not move. Counting it is counting a number that measured
+    // nothing.
+    seed({ rating: 640, endTime: 100, rated: true });
+    seed({ rating: 1800, endTime: 200, rated: false });
+
+    expect(typicalRating(db, { user: "alice", timeClass: "rapid" })).toBe(640);
+  });
+
+  it("is undefined when every game is unrated", () => {
+    seed({ rating: 1800, endTime: 100, rated: false });
+    expect(typicalRating(db, { user: "alice", timeClass: "rapid" })).toBeUndefined();
   });
 
   it("prefers recent games, so an old strength does not set the cohort", () => {

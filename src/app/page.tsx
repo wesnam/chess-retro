@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getDb } from "@/db/client";
 import { getUsername } from "@/settings/settings";
 import { countGames } from "@/games/queries";
-import { weaknessReport } from "@/weakness/report";
+import { weaknessReport, type WeaknessReport } from "@/weakness/report";
 import { MIN_GAMES, MIN_OPPORTUNITIES } from "@/weakness/score";
 import { fitCaveat } from "@/weakness/band-copy";
 import { TimeClassFilter } from "./TimeClassFilter";
@@ -66,6 +66,16 @@ export default async function DashboardPage({
       <Heading />
       <TimeClassFilter available={available} selected={timeClass} />
 
+      {/*
+        Above the branch, not inside it. An empty ranking is the case this
+        caveat exists for — a player above the cohort beats its rate on nearly
+        everything, every excess shrinks to zero, and the list comes back empty
+        with "nothing costs you more than your own average" underneath it.
+        Rendering it only beside a populated list put it everywhere except
+        there.
+      */}
+      <CohortCaveat report={report} />
+
       {report.weaknesses.length === 0 ? (
         <NoWeaknesses report={report} />
       ) : (
@@ -75,7 +85,6 @@ export default async function DashboardPage({
             {timeClass} moves. You lose {report.baseline.toFixed(1)} points of
             win probability on an average move; these cost you more.
           </p>
-          <CohortCaveat report={report} />
           <WeaknessList weaknesses={report.weaknesses} timeClass={timeClass} />
         </>
       )}
@@ -89,11 +98,7 @@ export default async function DashboardPage({
  * Rendered above the list rather than beside a number, because it qualifies
  * every ranking on the page: the comparison is what puts them in that order.
  */
-function CohortCaveat({
-  report,
-}: {
-  report: { fit: Parameters<typeof fitCaveat>[0]; rating: number | undefined };
-}) {
+function CohortCaveat({ report }: { report: WeaknessReport }) {
   const caveat = fitCaveat(report.fit, report.rating);
   if (!caveat) return null;
 

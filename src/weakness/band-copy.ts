@@ -1,4 +1,4 @@
-import { REFERENCE_BAND, type ReferenceFit } from "./band";
+import { ACCEPTED_RANGE, REFERENCE_BAND, type ReferenceFit } from "./band";
 
 /**
  * What to tell someone the reference cohort does not describe.
@@ -16,6 +16,15 @@ import { REFERENCE_BAND, type ReferenceFit } from "./band";
 
 const BAND = `${REFERENCE_BAND.min}-${REFERENCE_BAND.max}`;
 
+/**
+ * What counts as close enough, which is wider than what was measured.
+ *
+ * Quoted alongside the cohort so the two numbers are not mistaken for each
+ * other: a player at 770 is inside the tolerance and told nothing, while
+ * sitting well above the strongest player in the cohort itself.
+ */
+const ACCEPTED = `${ACCEPTED_RANGE.min}-${ACCEPTED_RANGE.max}`;
+
 export function fitCaveat(
   fit: ReferenceFit,
   rating: number | undefined,
@@ -27,17 +36,19 @@ export function fitCaveat(
     case "above-band":
       return (
         `Your ${REFERENCE_BAND.timeClass} rating is around ${rating}, but these rankings compare you ` +
-        `against players rated ${BAND}. You are stronger than that cohort, so this understates ` +
-        `your weaknesses — you will beat their rate on almost everything, and the gaps between ` +
-        `your own tactics matter more here than the comparison does.`
+        `against a cohort of players rated ${BAND} (anything from ${ACCEPTED} is treated as close ` +
+        `enough). You are stronger than that cohort, so this understates your weaknesses — you will ` +
+        `beat their rate on almost everything, and the gaps between your own tactics matter more ` +
+        `here than the comparison does.`
       );
 
     case "below-band":
       return (
         `Your ${REFERENCE_BAND.timeClass} rating is around ${rating}, but these rankings compare you ` +
-        `against players rated ${BAND}. You are weaker than that cohort, so this overstates your ` +
-        `weaknesses — missing more than they do is expected at your rating, and the order of the ` +
-        `list is more useful to you than the size of each gap.`
+        `against a cohort of players rated ${BAND} (anything from ${ACCEPTED} is treated as close ` +
+        `enough). You are weaker than that cohort, so this overstates your weaknesses — missing more ` +
+        `than they do is expected at your rating, and the order of the list is more useful to you ` +
+        `than the size of each gap.`
       );
 
     case "other-time-class":

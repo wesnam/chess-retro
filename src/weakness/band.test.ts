@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { REFERENCE_BAND, referenceFit } from "./band";
+import { ACCEPTED_RANGE, BAND_MARGIN, REFERENCE_BAND, referenceFit } from "./band";
 
 /**
  * Whether the baked-in peer rates describe this player at all.
@@ -27,6 +27,18 @@ describe("fit against the reference cohort", () => {
     // as a different population from 682 would be false precision.
     expect(referenceFit({ rating: 700, timeClass: "rapid" }).applies).toBe(true);
     expect(referenceFit({ rating: 580, timeClass: "rapid" }).applies).toBe(true);
+  });
+
+  it("names the range it actually accepts, margin included", () => {
+    // The margin nearly quadruples the measured span, so anything telling a
+    // person which cohort they are compared against must quote this range
+    // rather than the raw 596-682.
+    expect(ACCEPTED_RANGE.min).toBe(REFERENCE_BAND.min - BAND_MARGIN);
+    expect(ACCEPTED_RANGE.max).toBe(REFERENCE_BAND.max + BAND_MARGIN);
+    expect(referenceFit({ rating: ACCEPTED_RANGE.min, timeClass: "rapid" }).applies).toBe(true);
+    expect(referenceFit({ rating: ACCEPTED_RANGE.max, timeClass: "rapid" }).applies).toBe(true);
+    expect(referenceFit({ rating: ACCEPTED_RANGE.max + 1, timeClass: "rapid" }).applies).toBe(false);
+    expect(referenceFit({ rating: ACCEPTED_RANGE.min - 1, timeClass: "rapid" }).applies).toBe(false);
   });
 
   it("does not fit a player well above the band", () => {

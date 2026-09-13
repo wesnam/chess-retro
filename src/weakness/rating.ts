@@ -32,8 +32,10 @@ export function typicalRating(
       and(
         eq(games.user, scope.user),
         eq(games.timeClass, scope.timeClass),
-        // An unrated game says nothing about strength; counting it as zero
-        // would drag the average toward a cohort nobody belongs to.
+        // An unrated game says nothing about strength: the rating attached to
+        // it did not move and was not earned, so averaging it in picks a
+        // cohort on the strength of a number that measured nothing.
+        eq(games.rated, true),
         isNotNull(games.userRating),
       ),
     )
@@ -41,8 +43,16 @@ export function typicalRating(
     .limit(RATING_WINDOW)
     .all();
 
-  if (recent.length === 0) return undefined;
+  // Narrowed here rather than trusted from the query: `IS NOT NULL` makes the
+  // nulls unreachable, but a `?? 0` fallback would encode a wrong answer as a
+  // default if that filter ever changed — an average silently dragged toward
+  // zero picks a cohort nobody belongs to.
+  const ratings = recent
+    .map((row) => row.rating)
+    .filter((rating): rating is number => rating !== null);
 
-  const total = recent.reduce((sum, row) => sum + (row.rating ?? 0), 0);
-  return Math.round(total / recent.length);
+  if (ratings.length === 0) return undefined;
+
+  const total = ratings.reduce((sum, rating) => sum + rating, 0);
+  return Math.round(total / ratings.length);
 }

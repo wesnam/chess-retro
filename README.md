@@ -1,5 +1,8 @@
 # chess-retro
 
+[![CI](https://github.com/wesnam/chess-retro/actions/workflows/ci.yml/badge.svg)](https://github.com/wesnam/chess-retro/actions/workflows/ci.yml)
+[![Licence: GPL-3.0-or-later](https://img.shields.io/badge/licence-GPL--3.0--or--later-blue.svg)](LICENSE)
+
 Find the weaknesses you keep repeating — across hundreds of chess.com games, not just the last one.
 
 Chess.com's Game Review and lichess's analysis both tell you what went wrong in **one game**. Neither
@@ -38,8 +41,8 @@ Worth knowing before you spend an hour analysing games:
 - **The bundled peer cohort is 9 players rated 596–682, rapid.** Weaknesses are ranked by comparing
   your miss rates against theirs, so if you are much stronger or weaker than that the *sizes* of the
   gaps are off — a stronger player is understated, to the point where the dashboard can imply no
-  weaknesses at all. The ordering holds up better than the numbers, the app tells you when you are
-  outside the band, and the cohort can be rebuilt from your own opponents. See
+  weaknesses at all. The ordering holds up better than the numbers, and the app tells you when you
+  are outside the band. Rebuilding the cohort from your own opponents is planned, not built — see
   [How it works](#how-it-works).
 - **Single player per install, in practice.** The schema keeps multiple accounts apart correctly, but
   there is no account switcher in the UI — one username at a time, changed in Settings.
@@ -272,8 +275,13 @@ analysing strangers' games — but outside that band the comparison is wrong in 
 | Well below the band | **Overstates you.** Missing more than the cohort does is expected at your rating |
 | Another time control | Rough. Blunder rates differ by time control, so the ordering is more trustworthy than the sizes |
 
-The dashboard detects this and says so above the rankings, rather than reporting a confident number
-it cannot support. In every case the **order** of the list survives better than the size of each gap.
+The dashboard detects this and says so above the rankings — including when the ranking comes back
+**empty**, which is the usual result for a stronger player and the case the warning exists for. In
+every case the **order** of the list survives better than the size of each gap.
+
+A tolerance of 100 points either side is allowed before the warning appears, so ratings from roughly
+496 to 782 are treated as in-band. That is wider than the cohort actually measured; the warning says
+so.
 
 Rebuilding the cohort from players at your own strength is `referenceRates()` in
 `src/weakness/reference.ts` — it recomputes these rates from any set of analysed players in the
@@ -528,6 +536,11 @@ displaces an older one, and a ten-minute ceiling catches a disconnect that is ne
 - **Tests are colocated** as `*.test.ts`. Files named `*.slow.test.ts` spawn a real Stockfish binary
   and are excluded from the default run.
 - Vitest 5 prints an engine warning on odd-numbered Node releases such as 25. It runs correctly.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `npm run typecheck`, `npm test` and `npm run build`
+must pass, and [Development notes](#development-notes) is the standards document worth reading first.
 
 ## Licence
 
