@@ -71,7 +71,7 @@ function Coaching() {
             console.anthropic.com
           </a>{" "}
           — a pay-as-you-go API account, which is not the same as a Claude.ai
-          subscription. It costs about 5¢ per distinct ranking.
+          subscription. It costs under 2¢ per distinct ranking.
         </p>
       )}
     </section>

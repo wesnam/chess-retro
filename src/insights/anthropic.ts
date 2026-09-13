@@ -2,17 +2,22 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { CoachProvider } from "./provider";
 import { CoachError } from "./provider";
 import type { InsightRequest } from "./request";
+import { resolveModel } from "./model";
 
 /**
  * The coach, as an Anthropic call.
  *
- * The only file in this module that knows which model is being used, or that
- * a model is involved at all. The key is read from the process environment
+ * The only file in this module that knows a model is involved at all; which
+ * model it is lives in `model.ts`. The key is read from the process environment
  * and never leaves the server: this module is imported by server components
  * and route handlers only, and nothing it exports reaches the browser.
  */
 
-const MODEL = "claude-opus-5";
+/**
+ * Resolved once at module load, so every request in a process uses one model
+ * and the cache cannot be split across two of them mid-run.
+ */
+const MODEL = resolveModel(process.env.CHESS_RETRO_COACH_MODEL);
 
 /**
  * The output shape, enforced by the API rather than requested in prose.

@@ -57,7 +57,7 @@ Worth knowing before you spend an hour analysing games:
 | **Node.js 22+** | required | `node --version` to check. `better-sqlite3` needs 22; an older one fails to build with a native-module error rather than a clear message. `nvm use` picks it up from `.nvmrc`. |
 | **Stockfish** | required | `brew install stockfish` — analysis cannot run without it |
 | **A chess.com account** | required | only the public username; no password, no API key |
-| **Anthropic API key** | optional | adds written coaching, at roughly 5¢ per distinct ranking. Everything else works without it — see [Running without an API key](#running-without-an-api-key) |
+| **Anthropic API key** | optional | adds written coaching, at under 2¢ per distinct ranking. Everything else works without it — see [Running without an API key](#running-without-an-api-key) |
 
 Runs entirely on your machine. No account, no server, no data leaves the box — apart from fetching
 your own games from chess.com's public API, and the coaching call if you enable it.
@@ -126,7 +126,7 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env.local   # then restart npm run dev
 
 Keys come from [console.anthropic.com](https://console.anthropic.com/settings/keys). That is a
 pay-as-you-go API account, **not** a Claude.ai subscription — a subscription will not work here. It
-costs about 5¢ per distinct ranking, and answers are cached, so revisiting the dashboard is free.
+costs under 2¢ per distinct ranking, and answers are cached, so revisiting the dashboard is free.
 **Settings** shows whether it is on.
 
 ### 4. Analyse the corpus — the long one
@@ -194,6 +194,7 @@ keeps its database under `data/`, and runs every feature except the written coac
 | `CHESS_RETRO_DB` | `data/chess-retro.db` | Where the SQLite file lives. Point it elsewhere to keep several corpora side by side. |
 | `STOCKFISH_PATH` | `stockfish` | The engine binary. Only needed when Stockfish is not on your `PATH`. |
 | `ANTHROPIC_API_KEY` | *(unset)* | Enables the written coaching. Get one from [console.anthropic.com](https://console.anthropic.com/settings/keys) — it is a paid API account, separate from a Claude.ai subscription, which cannot be used here. Read server-side only; it never reaches the browser. |
+| `CHESS_RETRO_COACH_MODEL` | `claude-sonnet-5` | Which model writes the coaching. See [Using an API key](#using-an-api-key) for why Sonnet is the default. |
 
 Copy [`.env.example`](.env.example) to `.env.local` and edit, or set them in the environment:
 
@@ -206,7 +207,7 @@ not in the environment. Change them on the **Settings** page.
 
 ### Using an API key
 
-The coaching calls **Claude Opus 5** (`claude-opus-5`) through Anthropic's API. You need a key from
+The coaching calls **Claude Sonnet 5** (`claude-sonnet-5`) through Anthropic's API. You need a key from
 [console.anthropic.com](https://console.anthropic.com/settings/keys); this is a pay-as-you-go API
 account and is **not** the same thing as a Claude.ai subscription, which will not work here.
 
@@ -215,17 +216,24 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env.local
 ```
 
 **What it costs.** A coaching request is small — the ranked statistics and three example positions
-per weakness, measured at ~1,800 input tokens — and the answer is a few short paragraphs. At Opus 5
-rates ($5/M input, $25/M output) that is roughly **5¢ per call**.
+per weakness, measured at ~2,000 input tokens — and the answer is a few short paragraphs. At Sonnet 5
+rates ($2/M input, $10/M output) that is roughly **1.4¢ per call**, measured on a real request.
 
 You are not charged per page view. The answer is cached in your own database against a hash of the
 statistics that produced it, so the model is asked **once per distinct ranking**: revisiting the
 dashboard is free, and analysing more games re-asks only if the ranking actually moved. In normal
 use that is a handful of calls over the life of a corpus, not one per visit.
 
-The model is named in one place, `MODEL` in `src/insights/anthropic.ts`, if you would rather point it
-at a cheaper one — `claude-sonnet-5` costs $2/$10 per million. The cache key includes the model, so
-switching does not serve you the old model's prose.
+**Why Sonnet rather than Opus.** The model never discovers anything — every statistic and example is
+computed before it is called, and `validate.ts` drops any claim the request does not support — so its
+job is to put true numbers into words. Measured on a real corpus the two were indistinguishable on
+every gate that matters (weakness ids copied verbatim, practice themes inside the data, every example
+cited as supplied, no invented figures) while Sonnet cost about a third as much and answered in about
+half the time.
+
+To use a different one, set `CHESS_RETRO_COACH_MODEL` — `claude-opus-5` costs $5/$25 per million and
+is the model this was built and tuned on. The cache key includes the model, so switching invalidates
+rather than serving you the other one's prose.
 
 ### Running without an API key
 
