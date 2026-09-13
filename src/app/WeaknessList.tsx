@@ -6,6 +6,7 @@ import { weaknessId } from "@/insights/request";
 import type { WeaknessExample } from "@/weakness/queries";
 import { weaknessCopy } from "@/weakness/copy";
 import { practiceTheme } from "@/puzzles/theme";
+import { whyNoPractice } from "@/puzzles/why-no-practice";
 import { describeMove } from "@/games/move-notation";
 import {
   CoachNote,
@@ -65,6 +66,9 @@ function WeaknessCard({
   // no puzzle theme behind it, so it gets no practice link rather than one
   // that would serve puzzles about something else.
   const theme = practiceTheme(weakness);
+  // Said out loud rather than left as a hole: two cards with a practice link
+  // and a third with nothing reads as missing, not decided.
+  const noPractice = whyNoPractice(weakness);
   const rate = Math.round(weakness.failureRate * 100);
   const peers =
     weakness.referenceMissRate !== undefined
@@ -113,7 +117,7 @@ function WeaknessCard({
         />
       </dl>
 
-      {theme && (
+      {theme ? (
         <p className="weakness-practice">
           <Link
             href={`/practice?theme=${encodeURIComponent(theme)}&tc=${encodeURIComponent(timeClass)}`}
@@ -122,6 +126,8 @@ function WeaknessCard({
             Practise {copy.title.replace(/^You miss /, "")} →
           </Link>
         </p>
+      ) : (
+        noPractice && <p className="weakness-no-practice">{noPractice}</p>
       )}
 
       {weakness.examples.length > 0 && (

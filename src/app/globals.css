@@ -168,6 +168,19 @@ h2 {
   color: var(--muted);
 }
 
+/*
+ * Why a weakness has no practice link. Sits where the link would, so the card
+ * answers the question the missing button raises instead of leaving a gap.
+ */
+.weakness-no-practice {
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 1rem 0 0;
+  padding-left: 0.75rem;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
