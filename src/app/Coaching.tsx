@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motifLabel } from "@/analysis/motifs/labels";
+import {
+  nextCoachingState,
+  unavailable,
+  type CoachResponse,
+  type CoachingState,
+} from "./coaching-state";
 
 /**
  * The coach's prose, fetched after the statistics are already on screen.
@@ -12,23 +18,7 @@ import { motifLabel } from "@/analysis/motifs/labels";
  * call fails, the dashboard is still the ranked statistics it was before.
  */
 
-type Coaching = {
-  weaknesses: { key: string; explanation: string; why: string }[];
-  practice: { summary: string; themes: string[] };
-};
-
-type Response = {
-  /** Which control the server actually coached; may differ from the request. */
-  timeClass: string;
-  coaching: Coaching | null;
-  reason: string | null;
-};
-
-export type CoachingState = {
-  byKey: Map<string, { explanation: string; why: string }>;
-  practice?: Coaching["practice"];
-  status: "loading" | "ready" | "unavailable";
-};
+export type { CoachingState } from "./coaching-state";
 
 export function useCoaching(timeClass: string): CoachingState {
   const [state, setState] = useState<CoachingState>({
@@ -45,30 +35,17 @@ export function useCoaching(timeClass: string): CoachingState {
         const response = await fetch(
           `/api/coach?tc=${encodeURIComponent(timeClass)}`,
         );
-        const body = (await response.json()) as Response;
+        const body = (await response.json()) as CoachResponse;
         if (!current) return;
 
-        // Coaching for another control is worse than none: the numbers on
-        // screen would be rapid while the prose described blitz.
-        if (!body.coaching || body.timeClass !== timeClass) {
-          setState({ byKey: new Map(), status: "unavailable" });
-          return;
-        }
-
-        setState({
-          byKey: new Map(
-            body.coaching.weaknesses.map((w) => [
-              w.key,
-              { explanation: w.explanation, why: w.why },
-            ]),
-          ),
-          practice: body.coaching.practice,
-          status: "ready",
-        });
+        // Always settles: `nextCoachingState` never returns `loading`, so the
+        // panel cannot be left on "Writing your coaching…" — which is what a
+        // reader with no API key would otherwise stare at for ever.
+        setState(nextCoachingState(body, timeClass));
       } catch {
         // The statistics are already rendered; a failed coach is a missing
         // enhancement, not an error worth interrupting the page for.
-        if (current) setState({ byKey: new Map(), status: "unavailable" });
+        if (current) setState(unavailable());
       }
     })();
 

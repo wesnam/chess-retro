@@ -67,6 +67,13 @@ your own games from chess.com's public API, and the coaching call if you enable 
 From a clean clone to your own dashboard. **Budget about an hour** to the dashboard, nearly all of it
 step 4 running unattended — plus another ~15 minutes if you want the puzzle practice in step 6.
 
+**No Anthropic API key? Follow exactly the same steps.** Every one of them works without it — there
+is nothing to skip, nothing to configure, and no prompt to dismiss. The dashboard you reach at step 5
+is the whole feature: ranked weaknesses, the statistics behind each, how you compare to players at
+your rating, and links into the games where it happened. The only difference is that each weakness
+card carries its numbers without a written paragraph beside them. See
+[Running without an API key](#running-without-an-api-key).
+
 ### 1. Install and start — under a minute
 
 ```sh
