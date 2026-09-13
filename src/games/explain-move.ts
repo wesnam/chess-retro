@@ -103,6 +103,7 @@ export function explainMove(
           uci: move.uci,
           bestMoveUci: move.bestMoveUci,
           refutation: next?.bestLine,
+          isUserMove: move.isUserMove,
         });
 
   if (classification === "best") {

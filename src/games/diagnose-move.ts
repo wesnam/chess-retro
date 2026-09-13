@@ -42,6 +42,11 @@ export function diagnoseMove(options: {
    * that is, the refutation. Stored on the following ply.
    */
   refutation?: string | null;
+  /**
+   * Whose move this is. Possessives are written from the reader's side, so an
+   * opponent's blunder must not say "your bishop" about their bishop.
+   */
+  isUserMove?: boolean;
 }): Diagnosis | undefined {
   const { fenBefore, uci, bestMoveUci } = options;
 
@@ -72,15 +77,21 @@ export function diagnoseMove(options: {
   // Ordered by how certain the claim is, not by how bad it sounds. A mate is
   // proved by search; a capture the engine itself chose is proved by the
   // engine; a hanging piece is a static guess and goes last.
+  const mine = options.isUserMove !== false;
   const problem =
     mateAllowed(after) ??
+    // What the move passed up, when the engine's own choice would have won
+    // something. Distinct from a threat allowed: a quiet move can be a
+    // blunder purely by missing an opportunity, and every check above is
+    // silent on those.
+    opportunityLost(before, bestMoveUci, uci) ??
     // Before the static checks: the engine's own continuation is evidence,
     // and it catches refutations that take more than one move — an attack
     // now, the loss next move. Those are invisible to anything looking at a
     // single position, and they are most of what actually goes wrong.
-    refutedBy(after, options.refutation) ??
+    refutedBy(after, options.refutation, mine) ??
     captureMissed(before, bestMoveUci, uci) ??
-    hangingAfter(after, played.color) ??
+    hangingAfter(after, played.color, mine) ??
     undefined;
 
   if (!problem && !betterIdea) return undefined;
@@ -105,7 +116,11 @@ function mateAllowed(after: Chess): string | undefined {
  * Reported only when the attacker is worth less than the target or the target
  * is undefended outright, so a fair trade is never described as a blunder.
  */
-function hangingAfter(after: Chess, moverColor: "w" | "b"): string | undefined {
+function hangingAfter(
+  after: Chess,
+  moverColor: "w" | "b",
+  mine: boolean,
+): string | undefined {
   const opponent: Color = moverColor === "w" ? "b" : "w";
   let worst: { square: string; type: string; net: number } | undefined;
 
@@ -140,7 +155,7 @@ function hangingAfter(after: Chess, moverColor: "w" | "b"): string | undefined {
   }
 
   if (!worst) return undefined;
-  return `It leaves your ${PIECE_NAMES[worst.type] ?? worst.type} on ${worst.square} to be taken.`;
+  return `It leaves ${mine ? "your" : "their"} ${PIECE_NAMES[worst.type] ?? worst.type} on ${worst.square} to be taken.`;
 }
 
 /** The engine's move was a capture the player passed over. */
@@ -204,7 +219,11 @@ function describeBestMove(
  * engine's expectation rather than anything forced, and presenting it as
  * "what happens" would overstate it.
  */
-function refutedBy(after: Chess, refutation: string | null | undefined): string | undefined {
+function refutedBy(
+  after: Chess,
+  refutation: string | null | undefined,
+  mine: boolean,
+): string | undefined {
   if (!refutation) return undefined;
 
   const plies = refutation.split(/\s+/).filter(Boolean);
@@ -228,7 +247,7 @@ function refutedBy(after: Chess, refutation: string | null | undefined): string 
   if (!reply) return undefined;
 
   if (board.isCheckmate()) {
-    return `The opponent answers ${reply.san} — mate.`;
+    return `${mine ? "The opponent" : "You"} answer${mine ? "s" : ""} ${reply.san} — mate.`;
   }
 
   // What their reply attacks that we cannot adequately answer. Reported only
@@ -236,12 +255,12 @@ function refutedBy(after: Chess, refutation: string | null | undefined): string 
   // by something cheaper, so a fair trade is never called a refutation.
   const threatened = biggestThreat(board, opponent);
   if (threatened) {
-    return `The opponent answers ${reply.san}, hitting your ${threatened.piece} on ${threatened.square}.`;
+    return `${mine ? "The opponent answers" : "You answer"} ${reply.san}, hitting ${mine ? "your" : "their"} ${threatened.piece} on ${threatened.square}.`;
   }
 
   if (reply.captured) {
     const taken = PIECE_NAMES[reply.captured] ?? reply.captured;
-    return `The opponent answers ${reply.san}, taking your ${taken}.`;
+    return `${mine ? "The opponent answers" : "You answer"} ${reply.san}, taking ${mine ? "your" : "their"} ${taken}.`;
   }
 
   return undefined;
@@ -288,4 +307,59 @@ function biggestThreat(
   }
 
   return worst;
+}
+
+/**
+ * The engine's move would have won material and the played move did not.
+ *
+ * A move can be terrible without allowing anything: passing up a capture that
+ * wins a queen is a blunder even if the position afterwards is quiet. Nothing
+ * that looks at threats can see it.
+ */
+function opportunityLost(
+  before: Chess,
+  bestMoveUci: string | null,
+  uci: string,
+): string | undefined {
+  if (!bestMoveUci || bestMoveUci === uci) return undefined;
+
+  const probe = new Chess(before.fen());
+  let best;
+  try {
+    best = probe.move({
+      from: bestMoveUci.slice(0, 2),
+      to: bestMoveUci.slice(2, 4),
+      promotion: bestMoveUci.length > 4 ? bestMoveUci.slice(4) : undefined,
+    });
+  } catch {
+    return undefined;
+  }
+  if (!best) return undefined;
+
+  if (probe.isCheckmate()) {
+    return `${best.san} was mate, and this move passes it up.`;
+  }
+
+  // A capture that wins material outright, after the cheapest recapture.
+  if (best.captured) {
+    const mover = best.color;
+    const recapturers = probe.attackers(
+      best.to as Square,
+      mover === "w" ? "b" : "w",
+    );
+    const gained = pieceValue(best.captured);
+    const risked = recapturers.length > 0 ? pieceValue(best.piece) : 0;
+    if (gained - risked >= 3) {
+      const name = PIECE_NAMES[best.captured] ?? best.captured;
+      return `${best.san} would have won a ${name}.`;
+    }
+  }
+
+  // The engine's move attacks something the played move leaves alone.
+  const threat = biggestThreat(probe, best.color);
+  if (threat) {
+    return `${best.san} would have hit the ${threat.piece} on ${threat.square}.`;
+  }
+
+  return undefined;
 }

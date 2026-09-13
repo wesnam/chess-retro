@@ -133,6 +133,33 @@ describe("diagnoseMove", () => {
     expect(diagnosis?.problem).toBe("The engine saw something better.");
   });
 
+  it("names an opportunity the move passed up", () => {
+    // A move can be terrible without allowing anything. Bg7 threatens nothing
+    // and hangs nothing — it is a blunder purely because Bg5 would have won
+    // the queen, and every threat-based check is silent on that.
+    const diagnosis = diagnoseMove({
+      fenBefore: "r1bq1r1k/pp5p/5bpQ/3N4/2B5/8/PPP2PPP/R4RK1 b - - 1 16",
+      uci: "f6g7",
+      bestMoveUci: "f6g5",
+      isUserMove: false,
+    });
+
+    expect(diagnosis?.problem).toContain("Bg5");
+    expect(diagnosis?.problem).toContain("queen");
+  });
+
+  it("writes possessives from the reader's side", () => {
+    // An opponent's blunder must not say "your bishop" about their bishop.
+    const theirs = diagnoseMove({
+      fenBefore: "r1bq1r1k/pp5p/6p1/3N4/2B5/1Q6/P1P2PPb/1R2R1K1 b - - 0 21",
+      uci: "h2h1",
+      bestMoveUci: "d8d6",
+      isUserMove: false,
+    });
+
+    expect(theirs?.problem ?? "").not.toContain("your");
+  });
+
   it("survives a position it cannot read", () => {
     expect(
       diagnoseMove({ fenBefore: "not a fen", uci: "e2e4", bestMoveUci: "d2d4" }),

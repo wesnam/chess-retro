@@ -221,10 +221,21 @@ function MoveVerdict({
   if (!explained) return null;
 
   return (
-    <div className={`verdict verdict-${move.classification}`}>
+    <div
+      className={`verdict verdict-${move.classification}`}
+      data-whose={move.isUserMove ? "yours" : "theirs"}
+    >
       <p className="verdict-head">
         <span className="verdict-move">{move.san}</span>
         <span className={`tag ${move.classification}`}>{explained.name}</span>
+        {/*
+          Whose move this is, always. Without it an opponent's blunder reads
+          as the reader's own, and "X was better" looks like advice for them
+          when it is advice for the other side.
+        */}
+        <span className="verdict-whose">
+          {move.isUserMove ? "your move" : "opponent"}
+        </span>
       </p>
       {/*
         The concrete reason first, when there is one. "Cost 61.6 points of win

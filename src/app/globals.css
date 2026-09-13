@@ -943,3 +943,22 @@ button.move-slot:hover {
   font-size: 0.8rem;
   opacity: 0.75;
 }
+
+/* Whose move a verdict describes. Without this an opponent's blunder reads
+   as the reader's own. */
+.verdict-whose {
+  margin-left: auto;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.08rem 0.5rem;
+  white-space: nowrap;
+}
+
+.verdict[data-whose="theirs"] {
+  border-left-color: var(--line);
+  opacity: 0.88;
+}
