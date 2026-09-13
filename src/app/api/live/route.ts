@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { disposeLiveEngine, getLiveEngine } from "@/engine/live";
 import { EngineError, type LiveInfo } from "@/engine/uci-engine";
+import { engineErrorMessage } from "@/engine/engine-message";
 import { readLiveRequest } from "@/games/live-request";
 
 /**
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
           type: "error",
           message:
             error instanceof EngineError
-              ? `${error.message} Is Stockfish installed? Try: brew install stockfish`
+              ? engineErrorMessage(error.message)
               : "Live analysis failed.",
         });
       } finally {

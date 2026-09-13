@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { getUsername } from "@/settings/settings";
 import { jobState, pauseJob, startJob, stopJob } from "@/analysis/job-singleton";
 import { EngineError } from "@/engine/uci-engine";
+import { engineErrorMessage } from "@/engine/engine-message";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +47,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof EngineError) {
       return NextResponse.json(
-        {
-          error: `${error.message} Is Stockfish installed? Try: brew install stockfish`,
-        },
+        { error: engineErrorMessage(error.message) },
         { status: 503 },
       );
     }

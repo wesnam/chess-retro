@@ -7,6 +7,7 @@ import { getUsername } from "@/settings/settings";
 import { AlreadyRunningError, analyseAndStore, findGame } from "@/analysis/store";
 import { disposeEngine, getEngine } from "@/engine/singleton";
 import { EngineError } from "@/engine/uci-engine";
+import { engineErrorMessage } from "@/engine/engine-message";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,7 @@ export async function POST(
       disposeEngine();
       return NextResponse.json(
         {
-          error: `${error.message} Is Stockfish installed? Try: brew install stockfish`,
+          error: engineErrorMessage(error.message),
         },
         { status: 503 },
       );

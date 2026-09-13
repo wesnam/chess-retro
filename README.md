@@ -54,7 +54,7 @@ Worth knowing before you spend an hour analysing games:
 
 | | | |
 |---|---|---|
-| **Node.js 22+** | required | developed on 25 |
+| **Node.js 22+** | required | `node --version` to check. `better-sqlite3` needs 22; an older one fails to build with a native-module error rather than a clear message. `nvm use` picks it up from `.nvmrc`. |
 | **Stockfish** | required | `brew install stockfish` — analysis cannot run without it |
 | **A chess.com account** | required | only the public username; no password, no API key |
 | **Anthropic API key** | optional | adds written coaching. Everything else works without it — see [Configuration](#configuration) |
@@ -70,21 +70,33 @@ step 4 running unattended — plus another ~15 minutes if you want the puzzle pr
 ### 1. Install and start — under a minute
 
 ```sh
+node --version     # must be 22 or newer
 npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>. The database is created for you at `data/chess-retro.db` on first run.
+Open <http://localhost:3000>. The database is created for you at `data/chess-retro.db` on first run —
+there is no migration step and nothing to configure yet.
+
+If `npm install` fails while building `better-sqlite3`, you are on a Node older than 22. `nvm use`
+reads the bundled `.nvmrc`.
 
 ### 2. Install the engine — under a minute
 
-```sh
-brew install stockfish     # or your platform's package manager
-```
+| Platform | |
+|----------|---|
+| macOS | `brew install stockfish` |
+| Debian/Ubuntu | `sudo apt install stockfish` |
+| Fedora | `sudo dnf install stockfish` |
+| Arch | `sudo pacman -S stockfish` |
+| Windows | `winget install Stockfish.Stockfish`, or [download a binary](https://stockfishchess.org/download/) |
+| Anything else | [stockfishchess.org/download](https://stockfishchess.org/download/) |
+
+Check it worked: `stockfish` should print a version and wait for input (`quit` to exit).
 
 Stockfish is not bundled: it is GPL, several tens of megabytes, and platform-specific. If it is not
 on your `PATH`, set `STOCKFISH_PATH` to the binary. Nothing needs the engine until step 4, so the app
-starts fine without it — analysis is what fails, with a message saying so.
+starts fine without it — analysis is what fails, and the message tells you to install it.
 
 ### 3. Point it at your account — seconds
 
