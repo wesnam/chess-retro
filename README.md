@@ -191,6 +191,31 @@ costs nothing.
 
 ## How it works
 
+### Code layout
+
+The pipeline below runs across eleven modules. Each box in the diagrams has an address here:
+
+| Directory | What lives there |
+|-----------|------------------|
+| `src/ingest/` | Fetching games from chess.com, parsing PGN, mapping to rows, labelling openings. The incremental sync lives in `sync.ts`. |
+| `src/engine/` | Everything that speaks UCI to Stockfish: the process wrapper, the batch pool, the review singleton, the live search. Three separate processes, deliberately. |
+| `src/analysis/` | Turning a game into evaluated moves — accuracy, classification, the resumable batch job — plus `motifs/`, the tactical detectors. |
+| `src/weakness/` | The ranking. Aggregation queries, shrinkage scoring, the peer cohort and whether it fits you, and the prose for each card. |
+| `src/insights/` | The LLM coach: building a request from the ranking, calling Claude, validating the answer back against the statistics it was given. |
+| `src/puzzles/` | The Lichess puzzle database — a streaming zstd decompressor, the importer, theme matching and selection. |
+| `src/games/` | Review logic as pure functions: which position a step lands on, where arrows point, how the graph runs. No React here. |
+| `src/db/` | Drizzle schema, the DDL migration applied on open, and the memoised connection. |
+| `src/settings/` | The two stored settings: your username and how many games back to reach. |
+| `src/components/` | The shared board and evaluation graph. `Board.tsx` is the only place chessground is ever constructed, so every board in the app is the same one, configured differently. |
+| `src/app/` | Next.js routes: the dashboard, games, practice and settings pages, and the API handlers under `api/`. |
+
+Two conventions explain most of the split. **Logic comes out of components** into pure modules that
+are directly tested — `games/review-model.ts`, `components/eval-graph.ts`,
+`analysis/format-progress.ts` — so the components are wiring. And **everything that costs engine time or a network call is a module of
+its own**, so the expensive parts can be tested without paying for them.
+
+### The pipeline
+
 ```mermaid
 flowchart TB
     A[chess.com public API] -->|PGN + metadata| B[ingest]
@@ -328,8 +353,8 @@ sequenceDiagram
     E-->>R: bestmove (drained)
 ```
 
-**The engine is on the server, where the ticket asked for WebAssembly in a browser worker.** A
-deliberate deviation, recorded because it is the kind that looks like an oversight: the native engine
+**The engine is on the server, where the original design called for WebAssembly in a browser
+worker.** A deliberate deviation, recorded because it is the kind that looks like an oversight: the native engine
 is stronger, reuses the UCI layer the rest of the app already speaks, and adds no dependency or
 cross-origin isolation headers. What it gives up is the isolation a worker gets for free — the live
 engine is its own process and never queues behind batch work, but it competes for the same cores, so
