@@ -37,6 +37,11 @@ export function diagnoseMove(options: {
   fenBefore: string;
   uci: string;
   bestMoveUci: string | null;
+  /**
+   * The engine's expected continuation from the position this move REACHED —
+   * that is, the refutation. Stored on the following ply.
+   */
+  refutation?: string | null;
 }): Diagnosis | undefined {
   const { fenBefore, uci, bestMoveUci } = options;
 
@@ -69,6 +74,11 @@ export function diagnoseMove(options: {
   // engine; a hanging piece is a static guess and goes last.
   const problem =
     mateAllowed(after) ??
+    // Before the static checks: the engine's own continuation is evidence,
+    // and it catches refutations that take more than one move — an attack
+    // now, the loss next move. Those are invisible to anything looking at a
+    // single position, and they are most of what actually goes wrong.
+    refutedBy(after, options.refutation) ??
     captureMissed(before, bestMoveUci, uci) ??
     hangingAfter(after, played.color) ??
     undefined;
@@ -181,4 +191,101 @@ function describeBestMove(
   if (probe.isCheck()) return `${best.san} gives check.`;
 
   return `${best.san} was better.`;
+}
+
+/**
+ * What the opponent does about it, from the engine's own continuation.
+ *
+ * A single position cannot show a two-move refutation: after Qh6 nothing is
+ * hanging and no mate is available, yet Bg5 attacks the queen and wins it next
+ * move. The line names that, and it is the engine's line rather than a guess.
+ *
+ * Only the first two plies are used. Beyond that a continuation is the
+ * engine's expectation rather than anything forced, and presenting it as
+ * "what happens" would overstate it.
+ */
+function refutedBy(after: Chess, refutation: string | null | undefined): string | undefined {
+  if (!refutation) return undefined;
+
+  const plies = refutation.split(/\s+/).filter(Boolean);
+  if (plies.length === 0) return undefined;
+
+  const board = new Chess(after.fen());
+  // The side to move here is the OPPONENT: this is the position our move
+  // reached. Their reply is ply 0; ours is ply 1.
+  const opponent = board.turn();
+
+  let reply;
+  try {
+    reply = board.move({
+      from: plies[0]!.slice(0, 2),
+      to: plies[0]!.slice(2, 4),
+      promotion: plies[0]!.length > 4 ? plies[0]!.slice(4) : undefined,
+    });
+  } catch {
+    return undefined;
+  }
+  if (!reply) return undefined;
+
+  if (board.isCheckmate()) {
+    return `The opponent answers ${reply.san} — mate.`;
+  }
+
+  // What their reply attacks that we cannot adequately answer. Reported only
+  // when the target is worth something and is either undefended or attacked
+  // by something cheaper, so a fair trade is never called a refutation.
+  const threatened = biggestThreat(board, opponent);
+  if (threatened) {
+    return `The opponent answers ${reply.san}, hitting your ${threatened.piece} on ${threatened.square}.`;
+  }
+
+  if (reply.captured) {
+    const taken = PIECE_NAMES[reply.captured] ?? reply.captured;
+    return `The opponent answers ${reply.san}, taking your ${taken}.`;
+  }
+
+  return undefined;
+}
+
+/**
+ * The most valuable piece the side to move is attacking and we cannot hold.
+ *
+ * `attackerColor` is whoever just moved — the threat is theirs.
+ */
+function biggestThreat(
+  board: Chess,
+  attackerColor: Color,
+): { piece: string; square: string } | undefined {
+  const victimColor: Color = attackerColor === "w" ? "b" : "w";
+  let worst: { piece: string; square: string; net: number } | undefined;
+
+  for (const rank of board.board()) {
+    for (const square of rank) {
+      if (!square || square.color !== victimColor || square.type === "k") continue;
+
+      const attackers = board.attackers(square.square as Square, attackerColor);
+      if (attackers.length === 0) continue;
+
+      const value = pieceValue(square.type);
+      const defenders = board.attackers(square.square as Square, victimColor);
+      const cheapestAttacker = Math.min(
+        ...attackers
+          .map((sq) => board.get(sq))
+          .filter((piece) => piece !== undefined)
+          .map((piece) => pieceValue(piece.type)),
+      );
+      const net = defenders.length === 0 ? value : value - cheapestAttacker;
+      if (net < 3) continue;
+
+      if (!worst || net > worst.net) {
+        worst = {
+          piece: PIECE_NAMES[square.type] ?? square.type,
+          square: square.square,
+          net,
+        };
+      }
+    }
+  }
+
+  return worst;
 }

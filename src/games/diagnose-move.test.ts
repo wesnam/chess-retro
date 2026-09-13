@@ -80,6 +80,59 @@ describe("diagnoseMove", () => {
     expect(diagnosis).toBeUndefined();
   });
 
+  it("names a two-move refutation from the engine's line", () => {
+    // Qh6 hangs nothing and allows no mate, so every single-position check
+    // is silent — yet it cost 65 points, because Bg5 attacks the queen and
+    // wins it next move. This is the case single-move reasoning cannot see.
+    const diagnosis = diagnoseMove({
+      fenBefore: "r1bq1r1k/pp5p/5bp1/3N3Q/2B5/8/PPP2PPP/R4RK1 w - - 0 16",
+      uci: "h5h6",
+      bestMoveUci: "h5e2",
+      refutation: "f6g5 h6f8 d8f8 b2b3",
+    });
+
+    expect(diagnosis?.problem).toContain("Bg5");
+    expect(diagnosis?.problem).toContain("queen");
+    expect(diagnosis?.problem).toContain("h6");
+  });
+
+  it("attributes the threat to the opponent, not the player", () => {
+    // The line alternates sides. Reading our own capture as theirs produced
+    // "after Qxf8+ your rook is gone" when that move WINS a rook.
+    const diagnosis = diagnoseMove({
+      fenBefore: "r1bq1r1k/pp5p/5bp1/3N3Q/2B5/8/PPP2PPP/R4RK1 w - - 0 16",
+      uci: "h5h6",
+      bestMoveUci: "h5e2",
+      refutation: "f6g5 h6f8 d8f8",
+    });
+
+    expect(diagnosis?.problem).not.toContain("Qxf8");
+    expect(diagnosis?.problem).not.toContain("rook is gone");
+  });
+
+  it("falls back when no line was stored", () => {
+    // Most of the corpus predates principal-variation capture.
+    const diagnosis = diagnoseMove({
+      fenBefore: "r1bq1r1k/pp5p/5bp1/3N3Q/2B5/8/PPP2PPP/R4RK1 w - - 0 16",
+      uci: "h5h6",
+      bestMoveUci: "h5e2",
+      refutation: null,
+    });
+
+    expect(diagnosis?.problem).toBe("The engine saw something better.");
+  });
+
+  it("ignores a line it cannot replay", () => {
+    const diagnosis = diagnoseMove({
+      fenBefore: "r1bq1r1k/pp5p/5bp1/3N3Q/2B5/8/PPP2PPP/R4RK1 w - - 0 16",
+      uci: "h5h6",
+      bestMoveUci: "h5e2",
+      refutation: "z9z9 not a line",
+    });
+
+    expect(diagnosis?.problem).toBe("The engine saw something better.");
+  });
+
   it("survives a position it cannot read", () => {
     expect(
       diagnoseMove({ fenBefore: "not a fen", uci: "e2e4", bestMoveUci: "d2d4" }),

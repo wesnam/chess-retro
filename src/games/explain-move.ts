@@ -81,7 +81,11 @@ export const CLASSIFICATION_LEGEND = [
   },
 ] as const;
 
-export function explainMove(move: MoveRow): MoveExplanation | undefined {
+export function explainMove(
+  move: MoveRow,
+  /** The move that followed, whose stored line is the refutation of this one. */
+  next?: MoveRow,
+): MoveExplanation | undefined {
   const { classification, winPctBefore, winPctAfter } = move;
   if (!classification) return undefined;
 
@@ -98,6 +102,7 @@ export function explainMove(move: MoveRow): MoveExplanation | undefined {
           fenBefore: move.fenBefore,
           uci: move.uci,
           bestMoveUci: move.bestMoveUci,
+          refutation: next?.bestLine,
         });
 
   if (classification === "best") {

@@ -170,6 +170,9 @@ export function GameReview({
         */}
         <MoveVerdict
           move={moves.find((m) => m.ply === index + 1)}
+          // The following ply's stored line is the engine's refutation of
+          // this move — what the opponent does about it.
+          next={moves.find((m) => m.ply === index + 2)}
           missed={missedMotifs[index + 1]}
           analysed={analysed}
         />
@@ -204,15 +207,17 @@ export function GameReview({
  */
 function MoveVerdict({
   move,
+  next,
   missed,
   analysed,
 }: {
   move: MoveRow | undefined;
+  next: MoveRow | undefined;
   missed: string[] | undefined;
   analysed: boolean;
 }) {
   if (!move || !analysed) return null;
-  const explained = explainMove(move);
+  const explained = explainMove(move, next);
   if (!explained) return null;
 
   return (
