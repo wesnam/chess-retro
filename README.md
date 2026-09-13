@@ -44,8 +44,8 @@ your own games from chess.com's public API, and the coaching call if you enable 
 
 ## Getting started
 
-From a clean clone to your own dashboard. **Budget about an hour**, nearly all of it step 4 running
-unattended.
+From a clean clone to your own dashboard. **Budget about an hour** to the dashboard, nearly all of it
+step 4 running unattended — plus another ~15 minutes if you want the puzzle practice in step 6.
 
 ### 1. Install and start — under a minute
 
@@ -479,7 +479,9 @@ displaces an older one, and a ten-minute ceiling catches a disconnect that is ne
 - **"Already up to date" is decided on `stored` alone.** The tempting reading — nothing stored but
   something skipped — breaks on exactly the case that matters: a current corpus fetches no month at
   all, so `stored` and `skipped` are both zero, and the fallback would report "Downloaded 0 new
-  games" for the commonest sync there is. `sync-message.ts` holds the rule and is directly tested.
+  games" for the commonest sync there is. `sync-message.ts` holds the rule and is directly tested,
+  and takes the count alone rather than the sync result — a parameter that is not there cannot be
+  consulted by mistake.
 - **Tests are colocated** as `*.test.ts`. Files named `*.slow.test.ts` spawn a real Stockfish binary
   and are excluded from the default run.
 - Vitest 5 prints an engine warning on odd-numbered Node releases such as 25. It runs correctly.

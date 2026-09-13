@@ -8,7 +8,6 @@ type SyncResponse = {
   stored?: number;
   skipped?: number;
   unusable?: number;
-  monthsFetched?: string[];
   error?: string;
 };
 
@@ -33,13 +32,7 @@ export function SyncButton({ disabled }: { disabled?: boolean }) {
         return;
       }
 
-      setMessage(
-        syncOutcomeMessage({
-          stored: data.stored ?? 0,
-          skipped: data.skipped ?? 0,
-          monthsFetched: data.monthsFetched ?? [],
-        }),
-      );
+      setMessage(syncOutcomeMessage(data.stored ?? 0));
       router.refresh();
     } catch (error) {
       setFailed(true);

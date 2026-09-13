@@ -28,13 +28,20 @@ beforeEach(() => {
 
 const cp = (n: number): Score => ({ kind: "cp", cp: n });
 
-/** An analyser that records which games it was asked to look at. */
-function countingEngine(): Analyser & { gamesSeen: string[] } {
+/**
+ * An analyser that counts the searches it is asked for.
+ *
+ * Engine time is the cost the incremental path exists to avoid, and a position
+ * search is the unit of it — so a re-run that costs nothing shows up here as a
+ * flat zero, independently of what the game rows say.
+ */
+function countingEngine(): Analyser & { searches: number } {
   const stub = {
     depth: 18,
-    gamesSeen: [] as string[],
+    searches: 0,
     async newGame() {},
     async analyse(_fen: string) {
+      stub.searches += 1;
       return { score: cp(10), bestMove: "e2e4", bestLine: undefined, depth: 18 };
     },
   };
@@ -77,12 +84,18 @@ function analysedIds(): string[] {
 }
 
 /** Analyse everything outstanding, reporting which games cost engine time. */
-async function analyseOutstanding(): Promise<string[]> {
+async function analyseOutstanding(): Promise<{
+  analysed: string[];
+  searches: number;
+}> {
   const engine = countingEngine();
   const job = new AnalysisJob({ db, user: USER, engines: [engine] });
   const before = new Set(analysedIds());
   await job.run();
-  return analysedIds().filter((id) => !before.has(id));
+  return {
+    analysed: analysedIds().filter((id) => !before.has(id)),
+    searches: engine.searches,
+  };
 }
 
 describe("analysing after a re-sync", () => {
@@ -104,7 +117,7 @@ describe("analysing after a re-sync", () => {
 
     await syncGames(db, options);
     const firstPass = await analyseOutstanding();
-    expect(firstPass.length).toBe(past.length);
+    expect(firstPass.analysed.length).toBe(past.length);
 
     // A game played today lands in the current month.
     current = [{ ...mine[0], uuid: "played-today", end_time: 1_710_900_000 }];
@@ -115,7 +128,12 @@ describe("analysing after a re-sync", () => {
 
     // Exactly the new game cost engine time; the existing corpus was not
     // revisited. This is the difference between seconds and an overnight run.
-    expect(secondPass).toEqual(["played-today"]);
+    expect(secondPass.analysed).toEqual(["played-today"]);
+
+    // And the engine was asked about one game's worth of positions, not the
+    // whole corpus's — the game-row assertion above would still pass if the
+    // corpus had been re-searched and the results simply rewritten.
+    expect(secondPass.searches).toBeLessThan(firstPass.searches);
   });
 
   it("costs no engine time at all when nothing new arrived", async () => {
@@ -133,6 +151,8 @@ describe("analysing after a re-sync", () => {
 
     expect(progress.total).toBe(0);
     expect(progress.completed).toBe(0);
+    // Nothing was searched at all: a quiet sync is free.
+    expect(engine.searches).toBe(0);
   });
 });
 
@@ -156,7 +176,7 @@ describe("raising the corpus limit", () => {
 
     await syncGames(db, { ...base, corpusLimit: 2 });
     const firstPass = await analyseOutstanding();
-    expect(firstPass).toHaveLength(2);
+    expect(firstPass.analysed).toHaveLength(2);
 
     // The limit goes up; sync reaches further back.
     const backfill = await syncGames(db, { ...base, corpusLimit: 5 });
@@ -166,7 +186,9 @@ describe("raising the corpus limit", () => {
 
     // Only the newly backfilled games were analysed — the two from the first
     // pass kept their results rather than being re-run.
-    expect(secondPass).toHaveLength(3);
-    for (const id of firstPass) expect(secondPass).not.toContain(id);
+    expect(secondPass.analysed).toHaveLength(3);
+    for (const id of firstPass.analysed) {
+      expect(secondPass.analysed).not.toContain(id);
+    }
   });
 });
