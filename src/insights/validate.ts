@@ -19,7 +19,7 @@ import type { InsightRequest } from "./request";
  * Every motif a detector can produce — a spelling check, not a relevance one.
  *
  * Spelled out rather than derived from a value so that `satisfies` fails the
- * build if `Motif` gains a member: these are what ticket 10 will look puzzles
+ * build if `Motif` gains a member: these are what puzzle practice looks puzzles
  * up by, and a theme that matches no puzzle is worse than no theme. A theme
  * must ALSO appear in the request to survive (see `validateCoaching`) — being
  * a real motif is not the same as being this player's problem.

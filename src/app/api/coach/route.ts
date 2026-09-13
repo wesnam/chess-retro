@@ -11,8 +11,8 @@ import { buildRequest } from "@/insights/request";
  * The coaching for the currently selected time class.
  *
  * A route handler rather than part of the dashboard's server render: the
- * first call for a corpus waits on a model, and the statistics from ticket 08
- * must be on screen long before that returns. Cached calls come back at once.
+ * first call for a corpus waits on a model, and the ranked statistics must be
+ * on screen long before that returns. Cached calls come back at once.
  *
  * The API key is read here, on the server, and only the resulting prose is
  * sent to the browser.

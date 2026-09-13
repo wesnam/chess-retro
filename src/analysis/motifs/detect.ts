@@ -15,7 +15,7 @@ import {
  * Reimplemented from the heuristics described in lichess-puzzler's `cook.py`,
  * which is AGPL: the ideas are reused and none of its code is copied, which is
  * what keeps this project GPL rather than AGPL. Names match Lichess's theme
- * vocabulary exactly so ticket 10 can match puzzles by direct lookup with no
+ * vocabulary exactly so puzzle practice matches by direct lookup with no
  * translation table.
  *
  * Every detector is deliberately conservative. A false tag becomes a false

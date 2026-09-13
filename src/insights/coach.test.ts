@@ -92,7 +92,7 @@ describe("coachingFor", () => {
   });
 
   it("returns nothing rather than throwing when there is no provider", async () => {
-    // No API key configured: the dashboard must still render ticket 08's
+    // No API key configured: the dashboard must still render its ranked
     // statistics, so the absence of a coach is a normal state and not an error.
     const result = await coachingFor(db, "hikaru", request, undefined);
 

@@ -215,7 +215,7 @@ function isMonthComplete(db: Db, username: string, month: ArchiveMonth): boolean
  * Write a game and its moves in one transaction. Returns false if the game was
  * already stored, so syncing twice does not duplicate anything.
  *
- * Move rows are written without evaluations; ticket 04 fills those in.
+ * Move rows are written without evaluations; analysis fills those in later.
  */
 function storeGame(db: Db, { game, moves: parsedMoves }: MappedGame): boolean {
   return db.transaction((tx) => {

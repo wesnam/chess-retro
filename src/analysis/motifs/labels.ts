@@ -1,8 +1,8 @@
 /**
  * Lichess theme strings rendered as something a person can read.
  *
- * The stored identifiers stay exactly as Lichess writes them so ticket 10 can
- * match puzzles by direct lookup; only the display text lives here.
+ * The stored identifiers stay exactly as Lichess writes them so puzzle practice
+ * matches by direct lookup; only the display text lives here.
  */
 const LABELS: Record<string, string> = {
   fork: "fork",

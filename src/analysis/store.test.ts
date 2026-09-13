@@ -42,7 +42,7 @@ function stubEngine(
 
 const PGN = '[Event "Test"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
-/** A game with its move rows, as ticket 02's sync would have left them. */
+/** A game with its move rows, as the chess.com sync would have left them. */
 function seedGame(options: { id?: string; user?: string; color?: string } = {}) {
   const id = options.id ?? "g1";
   const user = options.user ?? "alice";

@@ -14,25 +14,23 @@ It opens on "your top 3 weaknesses in blitz", not on a list of games.
 
 Everything runs locally. Your games, your database, your machine.
 
-## Status
+## What it does
 
-Early development. Built as a sequence of vertical slices, each usable on its own:
+Early development, but every part below works today:
 
-| # | Slice | State |
-|---|-------|-------|
-| 01 | Scaffold, database, settings | ✅ done |
-| 02 | Sync chess.com games into a browsable list | ✅ done |
-| 03 | Label games with opening names | ✅ done |
-| 04 | Analyse one game and show its moves | ✅ done |
-| 05 | Interactive board for a reviewed game | ✅ done |
-| 06 | Batch-analyse the whole corpus, resumably | ✅ done |
-| 07 | Tag moves with tactical motifs | ✅ done |
-| 08 | **Dashboard ranking your top weaknesses** | ✅ done |
-| 09 | **Plain-English coaching on each weakness** | ✅ done |
-| 10 | **Puzzle practice matched to weaknesses** | ✅ done |
-| 11 | **Live engine analysis in the browser** | ✅ done |
-| 12 | Incremental sync and release readiness | ✅ done |
-| 13 | Rebuild the peer cohort from your own rating | planned |
+- **Ranks your recurring weaknesses** across five dimensions — which tactics you miss, which phase
+  you go wrong in, whether errors cluster under time pressure, which openings cost you, and whether
+  one piece is worse than the rest. All five compete in one ranking, per time control.
+- **Explains each one in plain English**, with the statistic behind it and links to the positions in
+  your own games where it happened.
+- **Prescribes puzzles** for the tactics you actually miss, from the Lichess database.
+- **Analyses your whole history with Stockfish**, resumably — pause it, close the laptop, pick it up.
+- **Reviews any game** on an interactive board, with the engine analysing live as you explore
+  variations.
+- **Stays current cheaply**: re-syncing fetches only what is new and analyses only that.
+
+Planned: rebuilding the peer comparison group from your own opponents, so the rankings fit players
+outside the bundled cohort's rating range. See [Known limitations](#known-limitations).
 
 ## Known limitations
 
@@ -254,7 +252,7 @@ sequenceDiagram
 data is necessary but not sufficient, because a model that knows chess can write a fluent paragraph
 about a weakness this player was never measured for. Every returned weakness is matched back against
 the request that produced it and dropped if unsupported. Practice themes pass two gates: the theme
-must be a motif a detector can emit (so ticket 10 can look up puzzles by it) **and** one this player
+must be a motif a detector can emit (so the practice page can look up puzzles by it) **and** one this player
 was actually measured on — a correctly spelled `backRankMate` is still advice about chess in general
 if their data never mentioned it. One invented claim costs that paragraph, not the page.
 
@@ -285,7 +283,7 @@ so.
 
 Rebuilding the cohort from players at your own strength is `referenceRates()` in
 `src/weakness/reference.ts` — it recomputes these rates from any set of analysed players in the
-database. Wiring that to a UI is ticket 13, and is the intended fix for this limitation.
+database. Wiring that to a UI is the intended fix for this limitation, and is not built yet.
 
 **Time control is a filter, never an aggregation axis.** A blitz blunder and a rapid blunder are
 different problems with different remedies. Averaging them describes a player who does not exist.
@@ -400,7 +398,7 @@ displaces an older one, and a ten-minute ceiling catches a disconnect that is ne
 - **Escape squares must be read from a board with the check removed.** chess.js only yields
   check-evasions while a king is in check, so every other piece reports zero moves — which made
   any check that also attacked something look like a trapped piece.
-- **Motif names are Lichess's exact theme strings**, so ticket 10 can match puzzles by direct
+- **Motif names are Lichess's exact theme strings**, so puzzle practice matches them by direct
   lookup with no translation table. Display text lives in `motifs/labels.ts`, never in the data.
 - **A game marked `error` leaves the corpus until something re-queues it.** `countPending` excludes
   failures deliberately, so one bad game cannot retry forever and stall an overnight run.
