@@ -220,5 +220,11 @@ export function whitePovScore(move: {
  */
 export function evalBarFraction(score: Score | undefined): number {
   if (!score) return 0.5;
-  return winPct(score) / 100;
+  // Rounded because this becomes a CSS percentage on a server-rendered
+  // element. `winPct` is a logistic built on `Math.exp`, whose last bit is not
+  // guaranteed identical between Node and a browser engine, so unrounded the
+  // same position renders `height: 60.782230092727296%` on the server and
+  // `60.78223009272731%` on the client — a hydration mismatch React will not
+  // patch up. Four decimals here is two on the percentage: invisible, stable.
+  return Math.round(winPct(score) * 100) / 10_000;
 }

@@ -501,7 +501,11 @@ function EvalBar({
    */
   unknown?: boolean;
 }) {
-  const whitePercent = fraction * 100;
+  // Rounded here, where the rendered string is built: `fraction` is already
+  // rounded, but multiplying it by 100 reintroduces float error (0.6087 * 100
+  // is 60.870000000000005), and that lands in a style attribute the server and
+  // the client must agree on character for character.
+  const whitePercent = Math.round(fraction * 10_000) / 100;
   return (
     <div
       className="eval-bar"

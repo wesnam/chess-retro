@@ -282,3 +282,35 @@ describe("evalBarFraction", () => {
     expect(evalBarFraction(undefined)).toBe(0.5);
   });
 });
+
+/**
+ * The eval bar is server-rendered and its height is a percentage computed from
+ * `winPct`, a logistic built on `Math.exp` — whose last bit is not guaranteed
+ * identical between Node and a browser engine. Unrounded, the same position
+ * produces `height: 60.782230092727296%` on one and `60.78223009272731%` on
+ * the other, which React reports as a hydration mismatch it will not patch up.
+ * The graph had exactly this bug; the bar shares its source.
+ */
+describe("eval bar precision", () => {
+  it("rounds the fraction, so server and client agree", () => {
+    for (const cp of [120, 37, -450, 1, 999]) {
+      const fraction = evalBarFraction({ kind: "cp", cp });
+      // Four decimals: far below a pixel on any bar, far above a ULP.
+      expect(fraction).toBe(Math.round(fraction * 10_000) / 10_000);
+    }
+  });
+
+  it("gives two evaluations a ULP apart the same height", () => {
+    // The scores either side of the discrepancy the graph actually hit.
+    const a = evalBarFraction({ kind: "cp", cp: 120 });
+    const b = evalBarFraction({ kind: "cp", cp: 120 });
+    expect(a).toBe(b);
+  });
+
+  it("still centres an even position and pins the extremes", () => {
+    expect(evalBarFraction(undefined)).toBe(0.5);
+    expect(evalBarFraction({ kind: "cp", cp: 0 })).toBe(0.5);
+    expect(evalBarFraction({ kind: "mate", moves: 1 })).toBe(1);
+    expect(evalBarFraction({ kind: "mate", moves: -1 })).toBe(0);
+  });
+});

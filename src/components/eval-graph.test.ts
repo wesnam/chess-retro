@@ -60,8 +60,9 @@ describe("graphGeometry", () => {
       height: HEIGHT,
     });
 
-    expect(points[0]!.x).toBeCloseTo(WIDTH / 3, 5);
-    expect(points[2]!.x).toBeCloseTo(WIDTH, 5);
+    // Rounded to a hundredth of a pixel by design, so asserted to that.
+    expect(points[0]!.x).toBeCloseTo(WIDTH / 3, 2);
+    expect(points[2]!.x).toBeCloseTo(WIDTH, 2);
   });
 
   it("keeps a single point inside the box rather than dividing by zero", () => {
@@ -146,8 +147,12 @@ describe("hitWidth", () => {
       height: HEIGHT,
     });
 
-    const spacing = points[1]!.x - points[0]!.x;
-    expect(hitWidth(points, WIDTH)).toBeGreaterThanOrEqual(spacing);
+    // Every gap, not just the first: rounding makes them differ slightly, and
+    // the widest is the one that would leave a dead stripe.
+    for (let i = 1; i < points.length; i += 1) {
+      const gap = points[i]!.x - points[i - 1]!.x;
+      expect(hitWidth(points, WIDTH)).toBeGreaterThanOrEqual(gap);
+    }
   });
 
   it("covers the whole width when there is only one point", () => {
@@ -158,5 +163,85 @@ describe("hitWidth", () => {
     });
 
     expect(hitWidth(points, WIDTH)).toBeGreaterThanOrEqual(WIDTH);
+  });
+});
+
+/**
+ * Coordinates are rounded, and that is a correctness requirement rather than
+ * tidiness.
+ *
+ * `whiteWinPct` comes from `winPct`, which is a logistic built on `Math.exp`.
+ * The last bit of that is not guaranteed identical between the Node process
+ * that server-renders the graph and the browser engine that hydrates it, so
+ * the same evaluation can produce 60.782230092727296 on one and
+ * 60.78223009272731 on the other. React compares the rendered attribute
+ * strings, sees `cy="37.649059110981796"` against `cy="37.64905911098178"`,
+ * and reports a hydration mismatch it will not patch up.
+ *
+ * Rounding to a precision far finer than a pixel but far coarser than a ULP
+ * makes the two agree. Two decimal places on a 96px-tall graph is a hundredth
+ * of a pixel — invisible, and stable.
+ */
+describe("coordinate precision", () => {
+  const SAMPLES = [
+    60.782230092727296, 60.78223009272731, 45.52783162621198,
+    37.64905911098178, 1 / 3, 99.999999999999,
+  ];
+
+  it("emits coordinates with at most two decimal places", () => {
+    const { points } = graphGeometry({
+      points: SAMPLES.map((pct, i) => point(pct, i + 1)),
+      width: 720,
+      height: 96,
+    });
+
+    for (const p of points) {
+      expect(Number.isFinite(p.x)).toBe(true);
+      // A value with more than two decimals would round to something else.
+      expect(p.x).toBe(Math.round(p.x * 100) / 100);
+      expect(p.y).toBe(Math.round(p.y * 100) / 100);
+    }
+  });
+
+  it("gives two evaluations a ULP apart the same coordinate", () => {
+    // The actual failure: the same position, computed on two engines.
+    const server = graphGeometry({
+      points: [point(60.782230092727296, 23)],
+      width: 720,
+      height: 96,
+    });
+    const client = graphGeometry({
+      points: [point(60.78223009272731, 23)],
+      width: 720,
+      height: 96,
+    });
+
+    expect(client.points[0]!.y).toBe(server.points[0]!.y);
+    expect(client.linePath).toBe(server.linePath);
+    expect(client.areaPath).toBe(server.areaPath);
+  });
+
+  it("rounds the paths too, not only the points", () => {
+    const { linePath, areaPath } = graphGeometry({
+      points: SAMPLES.map((pct, i) => point(pct, i + 1)),
+      width: 720,
+      height: 96,
+    });
+
+    for (const path of [linePath, areaPath]) {
+      for (const n of path.match(/-?\d+\.\d+/g) ?? []) {
+        expect(n.split(".")[1]!.length, `${n} in ${path}`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it("still places a balanced position on the centre line", () => {
+    // Rounding must not move anything that matters.
+    const { points, midline } = graphGeometry({
+      points: [point(50, 1)],
+      width: 720,
+      height: 96,
+    });
+    expect(points[0]!.y).toBe(midline);
   });
 });
