@@ -17,8 +17,8 @@ import {
  */
 
 function candidate(over: Partial<WeaknessCandidate> = {}): WeaknessCandidate {
-  return {
-    dimension: "motif",
+  const base = {
+    dimension: "motif" as const,
     key: "fork",
     label: "Forks",
     opportunities: 100,
@@ -26,6 +26,12 @@ function candidate(over: Partial<WeaknessCandidate> = {}): WeaknessCandidate {
     winPctLost: 100,
     games: 10,
     ...over,
+  };
+  return {
+    ...base,
+    // Defaults to the failure cost — the case for every dimension that
+    // partitions moves. A motif overrides it explicitly.
+    winPctLostAcrossAll: over.winPctLostAcrossAll ?? base.winPctLost,
   };
 }
 
@@ -54,6 +60,36 @@ describe("scoreCandidate", () => {
     expect(scored.severity).toBe(1);
     expect(scored.lift).toBe(1);
     expect(scored.score).toBe(0);
+  });
+
+  it("measures severity over the whole slice, not over failures alone", () => {
+    // A motif's cost accrues only on the plies it was missed, while every ply
+    // it appeared on counts as an opportunity. Dividing the partial cost by
+    // the full exposure made tactics structurally unable to rank: on the real
+    // corpus `hangingPiece` scored 1.78 against a 5.62 baseline because 397 of
+    // its 437 sightings cost nothing and still sat in the denominator.
+    const scored = scoreCandidate(
+      candidate({
+        opportunities: 400,
+        failures: 40,
+        winPctLost: 780,
+        winPctLostAcrossAll: 2400,
+      }),
+      { baselineSeverity: 5 },
+    );
+
+    // 2400/400, not 780/400.
+    expect(scored.severity).toBeCloseTo(6, 6);
+    expect(scored.lift).toBeGreaterThan(1);
+  });
+
+  it("still reports the failure cost, which is what the card shows", () => {
+    const scored = scoreCandidate(
+      candidate({ winPctLost: 780, winPctLostAcrossAll: 2400 }),
+      { baselineSeverity: 5 },
+    );
+
+    expect(scored.winPctLost).toBe(780);
   });
 
   it("reports the failure rate against opportunities, not against failures", () => {

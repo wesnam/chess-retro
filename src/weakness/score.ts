@@ -37,6 +37,20 @@ export type WeaknessCandidate = {
   /** Total win probability thrown away across those failures. */
   winPctLost: number;
   /**
+   * Total win probability thrown away across EVERY opportunity, not only the
+   * failures.
+   *
+   * The two must be measured over the same population or dimensions are not
+   * comparable. A phase slice accrues cost on every move it contains; a motif
+   * slice accrued cost only on the plies tagged `missed`, while counting every
+   * ply the tactic appeared on as an opportunity. Dividing a partial cost by a
+   * full exposure made every motif look mild — `hangingPiece` read 1.78
+   * against a 5.62 baseline not because the player handles hanging pieces well
+   * but because 397 of its 437 sightings cost nothing and still sat in the
+   * denominator. No motif could ever out-rank a phase.
+   */
+  winPctLostAcrossAll: number;
+  /**
    * How many distinct games this candidate was seen in.
    *
    * Opportunities alone cannot separate a pattern from an event: one game
@@ -106,7 +120,11 @@ export function scoreCandidate(
     };
   }
 
-  const severity = winPctLost / opportunities;
+  // Cost across the whole slice over opportunities across the whole slice —
+  // the same population on both sides, so a motif and a phase mean the same
+  // thing by this measure. `winPctLost` remains what the card shows, because
+  // "this cost you N points" is about the failures.
+  const severity = candidate.winPctLostAcrossAll / opportunities;
   const failureRate = failures / opportunities;
 
   const { baselineSeverity } = options;

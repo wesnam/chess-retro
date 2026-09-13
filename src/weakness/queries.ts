@@ -80,6 +80,30 @@ export function motifCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
       failures: sql<number>`COUNT(DISTINCT CASE WHEN ${moveMotifs.role} = 'missed' THEN ${moveMotifs.gameId} || ':' || ${moveMotifs.ply} END)`,
       games: sql<number>`COUNT(DISTINCT ${moveMotifs.gameId})`,
       lost: sql<number>`SUM(CASE WHEN ${moveMotifs.role} = 'missed' THEN MAX(0, ${moves.winPctBefore} - ${moves.winPctAfter}) ELSE 0 END)`,
+      /**
+       * Cost across every ply the tactic appeared on, whatever the role —
+       * the same population `opportunities` counts. Severity needs both sides
+       * measured alike; see `winPctLostAcrossAll` on WeaknessCandidate.
+       *
+       * Summed over DISTINCT plies: one ply carries several motif rows, and
+       * unlike the `missed` sum there is no role CASE to collapse them, so a
+       * bare SUM would count a ply once per role it holds.
+       */
+      lostAcrossAll: sql<number>`COALESCE((
+        SELECT SUM(cost) FROM (
+          SELECT DISTINCT mm2.game_id, mm2.ply,
+                 MAX(0, m2.win_pct_before - m2.win_pct_after) AS cost
+          FROM move_motifs mm2
+          JOIN moves m2
+            ON m2.game_id = mm2.game_id AND m2.user = mm2.user AND m2.ply = mm2.ply
+          WHERE mm2.user = ${user}
+            AND mm2.time_class = ${timeClass}
+            AND mm2.motif = ${moveMotifs.motif}
+            AND m2.is_user_move = 1
+            AND m2.win_pct_before IS NOT NULL
+            AND m2.win_pct_after IS NOT NULL
+        )
+      ), 0)`,
     })
     .from(moveMotifs)
     .innerJoin(
@@ -115,6 +139,7 @@ export function motifCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
     opportunities: row.opportunities ?? 0,
     failures: row.failures ?? 0,
     winPctLost: row.lost ?? 0,
+    winPctLostAcrossAll: row.lostAcrossAll ?? 0,
     games: row.games ?? 0,
   }));
 }
@@ -155,6 +180,9 @@ export function phaseCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
       opportunities: row.opportunities ?? 0,
       failures: row.failures ?? 0,
       winPctLost: row.lost ?? 0,
+      // Every move in the slice contributes to both, so these coincide for
+      // the move-partitioning dimensions.
+      winPctLostAcrossAll: row.lost ?? 0,
       games: row.games ?? 0,
     }));
 }
@@ -207,6 +235,9 @@ export function timeCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
       opportunities: row.opportunities ?? 0,
       failures: row.failures ?? 0,
       winPctLost: row.lost ?? 0,
+      // Every move in the slice contributes to both, so these coincide for
+      // the move-partitioning dimensions.
+      winPctLostAcrossAll: row.lost ?? 0,
       games: row.games ?? 0,
     }));
 }
@@ -247,6 +278,9 @@ export function openingCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
       opportunities: row.opportunities ?? 0,
       failures: row.failures ?? 0,
       winPctLost: row.lost ?? 0,
+      // Every move in the slice contributes to both, so these coincide for
+      // the move-partitioning dimensions.
+      winPctLostAcrossAll: row.lost ?? 0,
       games: row.games ?? 0,
     }));
 }
@@ -282,6 +316,7 @@ export function pieceCandidates(db: Db, scope: Scope): WeaknessCandidate[] {
     opportunities: row.opportunities ?? 0,
     failures: row.failures ?? 0,
     winPctLost: row.lost ?? 0,
+    winPctLostAcrossAll: row.lost ?? 0,
     games: row.games ?? 0,
   }));
 }
