@@ -15,6 +15,7 @@
     "test:slow": "vitest run --config vitest.slow.config.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "better-sqlite3": "^13.0.3",
     "chess.js": "^1.4.0",
     "chessground": "^9.2.1",

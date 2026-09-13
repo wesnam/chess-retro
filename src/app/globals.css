@@ -962,3 +962,66 @@ button.move-slot:hover {
   border-left-color: var(--line);
   opacity: 0.88;
 }
+
+/* --- Coaching (ticket 09) ------------------------------------------------ */
+
+/* The coach's prose. Set off from the measured claim above it with a rule,
+   so it reads as commentary on the statistics rather than as more of them. */
+.coach-note {
+  margin: 0 0 1rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  max-width: 62ch;
+}
+
+.coach-note p {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.coach-note p:last-child {
+  margin-bottom: 0;
+}
+
+.coach-why {
+  color: var(--muted);
+}
+
+.coach-why strong {
+  color: var(--text);
+}
+
+/* Holds its place while the model is writing, so the card does not jump when
+   the prose lands. */
+.coach-note.pending {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+  border-left-color: var(--border);
+}
+
+.practice {
+  margin-bottom: 1.5rem;
+}
+
+.practice h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+
+.practice p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.practice-themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}

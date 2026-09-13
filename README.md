@@ -25,7 +25,7 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 06 | Batch-analyse the whole corpus, resumably | ✅ done |
 | 07 | Tag moves with tactical motifs | ✅ done |
 | 08 | **Dashboard ranking your top weaknesses** | ✅ done |
-| 09 | Plain-English coaching on each weakness | |
+| 09 | **Plain-English coaching on each weakness** | ✅ done |
 | 10 | Puzzle practice matched to weaknesses | |
 | 11 | Live engine analysis in the browser | |
 | 12 | Incremental sync and release readiness | |
@@ -68,6 +68,7 @@ file — back it up by copying it, reset by deleting it.
 |----------|---------|---------|
 | `CHESS_RETRO_DB` | `data/chess-retro.db` | Database location |
 | `STOCKFISH_PATH` | `stockfish` | Engine binary |
+| `ANTHROPIC_API_KEY` | *(unset)* | Enables the coaching prose on the dashboard. Without it the dashboard still ranks and explains your weaknesses from the statistics — the core feature is not gated behind a paid account. Read server-side only; it never reaches the browser. |
 
 ## How it works
 
@@ -94,6 +95,45 @@ Two design points worth knowing:
 deterministic code before the model is called. A `GROUP BY` over 40,000 positions is cheaper and more
 reliable than a language model eyeballing the same data. The model's job is turning a true statistic
 into an explanation you can act on.
+
+**Coaching is cached against its inputs.** The model is asked once per distinct set of statistics.
+The cache key hashes three things: the request (corpus size, ranked weaknesses, and three example
+positions each), the player it is about, and the model that wrote it — identical numbers belonging
+to two accounts are not the same explanation, and an upgraded model must not keep serving the old
+one's prose. Revisiting the dashboard is instant and costs nothing; analysing more games re-asks
+only if the ranking actually moved.
+
+```mermaid
+sequenceDiagram
+    participant P as Dashboard (server)
+    participant B as Browser
+    participant R as /api/coach
+    participant DB as insights table
+    participant M as Claude
+
+    P->>B: ranked statistics, rendered immediately
+    B->>R: GET /api/coach?tc=rapid
+    R->>R: weaknessReport → buildRequest<br/>sha256(request + user + model)
+    R->>DB: look up input_hash
+    alt cached
+        DB-->>R: stored prose
+    else first time for these statistics
+        R->>M: statistics + 3 exemplars per weakness
+        M-->>R: JSON (schema-enforced)
+        R->>R: validate against the request
+        R->>DB: store under input_hash
+    end
+    R-->>B: coaching
+    B->>B: fill in each card
+```
+
+**The model explains; it never discovers — and it is checked.** The instruction to stay inside the
+data is necessary but not sufficient, because a model that knows chess can write a fluent paragraph
+about a weakness this player was never measured for. Every returned weakness is matched back against
+the request that produced it and dropped if unsupported. Practice themes pass two gates: the theme
+must be a motif a detector can emit (so ticket 10 can look up puzzles by it) **and** one this player
+was actually measured on — a correctly spelled `backRankMate` is still advice about chess in general
+if their data never mentioned it. One invented claim costs that paragraph, not the page.
 
 **Time control is a filter, never an aggregation axis.** A blitz blunder and a rapid blunder are
 different problems with different remedies. Averaging them describes a player who does not exist.
