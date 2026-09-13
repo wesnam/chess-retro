@@ -56,8 +56,24 @@ export type Review = {
   lastPositionIndex: number;
 };
 
-/** Classifications worth interrupting the reviewer with an arrow. */
-const SERIOUS = new Set(["inaccuracy", "mistake", "blunder"]);
+/**
+ * Classifications that get a best-move arrow.
+ *
+ * Every move of the reviewer's where the engine had a different idea, not
+ * only the bad ones: "the engine would have played this instead" is worth
+ * seeing on a move that was merely good, and restricting it to errors hid the
+ * alternative on exactly the moves a player is most curious about.
+ *
+ * `best` is absent because there is nothing to point at — the move played IS
+ * the engine's choice, and `arrowFor` filters that case anyway.
+ */
+const ARROW_CLASSIFICATIONS = new Set([
+  "excellent",
+  "good",
+  "inaccuracy",
+  "mistake",
+  "blunder",
+]);
 
 export function buildReview({
   moves,
@@ -113,13 +129,19 @@ export function buildReview({
 /**
  * The arrow to draw on the position this move was played from.
  *
- * Only the reviewer's own serious errors get one: the opponent's mistakes are
- * not their lesson, and an arrow pointing at the move actually played would
- * read as "you should have played what you played".
+ * The reviewer's own moves only: the opponent's alternatives are a different
+ * question from their own review. An arrow pointing at the move actually
+ * played would read as "you should have played what you played", so that case
+ * is filtered too.
  */
 function arrowFor(move: ReviewMoveInput): [Key, Key] | undefined {
   if (!move.isUserMove) return undefined;
-  if (!move.classification || !SERIOUS.has(move.classification)) return undefined;
+  if (
+    !move.classification ||
+    !ARROW_CLASSIFICATIONS.has(move.classification)
+  ) {
+    return undefined;
+  }
   if (!move.bestMoveUci) return undefined;
   if (move.bestMoveUci === move.uci) return undefined;
   return squaresOf(move.bestMoveUci);

@@ -140,17 +140,35 @@ describe("buildReview", () => {
     expect(review.positions[1]!.bestMove).toBeUndefined();
   });
 
-  it("does not draw an arrow on a good move", () => {
+  it("draws an arrow on a good move the engine disagreed with", () => {
+    // "The engine would have played this instead" is worth seeing on a move
+    // that was merely good. Restricting arrows to errors hid the alternative
+    // on exactly the moves a player is most curious about.
     const review = buildReview({
-      moves: [
-        move({ ply: 1, classification: "good", bestMoveUci: "d2d4" }),
-        move({ ply: 2, classification: "best", bestMoveUci: "e7e5" }),
-      ],
+      moves: [move({ ply: 1, classification: "good", bestMoveUci: "d2d4" })],
+      userColor: "w",
+    });
+
+    expect(review.positions[0]!.bestMove).toEqual(["d2", "d4"]);
+  });
+
+  it("draws an arrow on an excellent move the engine disagreed with", () => {
+    const review = buildReview({
+      moves: [move({ ply: 1, classification: "excellent", bestMoveUci: "d2d4" })],
+      userColor: "w",
+    });
+
+    expect(review.positions[0]!.bestMove).toEqual(["d2", "d4"]);
+  });
+
+  it("draws no arrow on a best move", () => {
+    // The move played IS the engine's choice, so there is nothing to point at.
+    const review = buildReview({
+      moves: [move({ ply: 1, classification: "best", bestMoveUci: "e7e5" })],
       userColor: "w",
     });
 
     expect(review.positions[0]!.bestMove).toBeUndefined();
-    expect(review.positions[1]!.bestMove).toBeUndefined();
   });
 
   it("does not draw an arrow when the best move is what was played", () => {
