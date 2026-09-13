@@ -221,13 +221,24 @@ function MoveVerdict({
         <span className="verdict-move">{move.san}</span>
         <span className={`tag ${move.classification}`}>{explained.name}</span>
       </p>
-      <p className="verdict-why">{explained.why}</p>
-      {explained.betterMove && (
+      {/*
+        The concrete reason first, when there is one. "Cost 61.6 points of win
+        probability" is the mark restated in other units, not a reason — it
+        goes last, as the fallback for the majority of errors where nothing
+        certain can be named.
+      */}
+      {explained.problem && (
+        <p className="verdict-problem">{explained.problem}</p>
+      )}
+      {explained.betterIdea && (
+        <p className="verdict-better">{explained.betterIdea}</p>
+      )}
+      {!explained.betterIdea && explained.betterMove && (
         <p className="verdict-better">
           Engine preferred <strong>{formatUci(explained.betterMove)}</strong>
-          {/* The arrow on the board shows the same move. */}
         </p>
       )}
+      <p className="verdict-why">{explained.cost}</p>
       {missed?.length ? (
         <p className="verdict-missed">You {missedSummary(missed)}.</p>
       ) : null}

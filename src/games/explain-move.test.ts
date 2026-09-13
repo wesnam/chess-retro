@@ -49,15 +49,15 @@ describe("explainMove", () => {
     const explained = explainMove(
       move({ winPctBefore: 70, winPctAfter: 40, classification: "blunder" }),
     );
-    expect(explained?.why).toContain("30.0 points of win probability");
+    expect(explained?.cost).toContain("30.0 points of win probability");
   });
 
   it("describes the swing in words when the assessment changed", () => {
     const explained = explainMove(
       move({ winPctBefore: 90, winPctAfter: 50, classification: "blunder" }),
     );
-    expect(explained?.why).toContain("winning");
-    expect(explained?.why).toContain("level");
+    expect(explained?.cost).toContain("winning");
+    expect(explained?.cost).toContain("level");
   });
 
   it("omits a swing when the assessment did not change", () => {
@@ -65,7 +65,7 @@ describe("explainMove", () => {
     const explained = explainMove(
       move({ winPctBefore: 95, winPctAfter: 90, classification: "good" }),
     );
-    expect(explained?.why).not.toContain("→");
+    expect(explained?.cost).not.toContain("→");
   });
 
   it("never reports a negative cost", () => {
@@ -73,14 +73,14 @@ describe("explainMove", () => {
     const explained = explainMove(
       move({ winPctBefore: 40, winPctAfter: 60, classification: "excellent" }),
     );
-    expect(explained?.why).toContain("0.0 points");
+    expect(explained?.cost).toContain("0.0 points");
   });
 
   it("handles a move with no evaluation stored", () => {
     const explained = explainMove(
       move({ winPctBefore: null, winPctAfter: null }),
     );
-    expect(explained?.why).toContain("No evaluation");
+    expect(explained?.cost).toContain("No evaluation");
   });
 
   it("returns nothing for an unclassified move", () => {

@@ -929,3 +929,17 @@ button.move-slot:hover {
   color: var(--muted);
   line-height: 1.45;
 }
+
+/* The concrete reason leads; the score is the fallback beneath it. */
+.verdict-problem {
+  margin: 0.2rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.verdict .verdict-why {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}

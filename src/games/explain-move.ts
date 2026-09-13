@@ -1,4 +1,5 @@
 import { THRESHOLDS } from "@/analysis/accuracy";
+import { diagnoseMove } from "./diagnose-move";
 import type { MoveRow } from "./queries";
 
 /**
@@ -17,8 +18,16 @@ import type { MoveRow } from "./queries";
 export type MoveExplanation = {
   /** What the mark means, e.g. "Blunder". */
   name: string;
-  /** Why this move got it, in one sentence. */
-  why: string;
+  /**
+   * What went wrong on the board, when it can be named concretely — a mate
+   * allowed, a capture passed over, a piece left hanging. Absent for most
+   * errors, because a wrong explanation is worse than none.
+   */
+  problem: string | undefined;
+  /** What the better move would have done, e.g. "Qxc2 takes the queen." */
+  betterIdea: string | undefined;
+  /** What it cost, as a fallback when nothing concrete can be named. */
+  cost: string;
   /** The engine's preference, in UCI, when it differed. */
   betterMove: string | undefined;
 };
@@ -82,12 +91,33 @@ export function explainMove(move: MoveRow): MoveExplanation | undefined {
       ? move.bestMoveUci
       : undefined;
 
+  const diagnosis =
+    classification === "best"
+      ? undefined
+      : diagnoseMove({
+          fenBefore: move.fenBefore,
+          uci: move.uci,
+          bestMoveUci: move.bestMoveUci,
+        });
+
   if (classification === "best") {
-    return { name, why: "The engine's first choice.", betterMove: undefined };
+    return {
+      name,
+      problem: undefined,
+      betterIdea: undefined,
+      cost: "The engine's first choice.",
+      betterMove: undefined,
+    };
   }
 
   if (winPctBefore == null || winPctAfter == null) {
-    return { name, why: "No evaluation stored for this move.", betterMove };
+    return {
+      name,
+      problem: diagnosis?.problem,
+      betterIdea: diagnosis?.betterIdea,
+      cost: "No evaluation stored for this move.",
+      betterMove,
+    };
   }
 
   const drop = Math.max(0, winPctBefore - winPctAfter);
@@ -97,12 +127,18 @@ export function explainMove(move: MoveRow): MoveExplanation | undefined {
   // what the classification actually measures — and because "you went from
   // winning to losing" is the fact that matters, not the pawn count.
   const swing = describeSwing(winPctBefore, winPctAfter);
-  const why =
+  const cost =
     drop < THRESHOLDS.excellent
       ? `Cost ${rounded} points of win probability — barely anything.`
       : `Cost ${rounded} points of win probability${swing ? `: ${swing}` : ""}.`;
 
-  return { name, why, betterMove };
+  return {
+    name,
+    problem: diagnosis?.problem,
+    betterIdea: diagnosis?.betterIdea,
+    cost,
+    betterMove,
+  };
 }
 
 /** "you were winning, now it is level" — the swing in plain words. */
