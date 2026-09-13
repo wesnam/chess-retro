@@ -214,7 +214,12 @@ describe("matchOpening", () => {
   });
 });
 
-describe("importOpenings", () => {
+// Every test here imports the real 3,800-line dataset, which costs about a
+// second to replay through chess.js; the two that import twice cost two. That
+// fits in the 5s default on a dev machine but not on a CI runner, so the whole
+// suite gets the headroom rather than the two tests that happen to exceed it
+// today.
+describe("importOpenings", { timeout: 30_000 }, () => {
   it("loads the bundled dataset into the database", () => {
     const db = tempDb();
     const count = importOpenings(db);
@@ -285,7 +290,8 @@ describe("importOpenings", () => {
   });
 });
 
-describe("labelGames", () => {
+// Same dataset cost as importOpenings above: each test imports it once.
+describe("labelGames", { timeout: 30_000 }, () => {
   function seedGame(db: Db, id: string, pgn: string): void {
     db.insert(games)
       .values({
