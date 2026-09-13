@@ -73,6 +73,15 @@ export type ScoredWeakness = WeaknessCandidate & {
   /** How much the sample size is trusted, 0-1. */
   confidence: number;
   failureRate: number;
+  /**
+   * How much more often this player misses the tactic than peers of similar
+   * strength, shrunk by confidence. Undefined when no reference rate exists
+   * for this candidate — every non-motif dimension, and motifs the cohort saw
+   * too rarely to measure.
+   */
+  excessRate: number | undefined;
+  /** The cohort's miss rate this was measured against, when there was one. */
+  referenceMissRate: number | undefined;
   score: number;
 };
 
@@ -104,7 +113,7 @@ export const SHRINKAGE_PRIOR = 25;
 
 export function scoreCandidate(
   candidate: WeaknessCandidate,
-  options: { baselineSeverity: number },
+  options: { baselineSeverity: number; referenceMissRate?: number },
 ): ScoredWeakness {
   const { opportunities, failures, winPctLost } = candidate;
 
@@ -116,6 +125,8 @@ export function scoreCandidate(
       lift: 0,
       confidence: 0,
       failureRate: 0,
+      excessRate: undefined,
+      referenceMissRate: options.referenceMissRate,
       score: 0,
     };
   }
@@ -169,10 +180,52 @@ export function scoreCandidate(
    * Damped, a 10x lift counts a little over three times a 2x lift rather than
    * five times, which is enough for evidence to matter.
    */
-  const score = Math.log1p(excess) * Math.log1p(winPctLost);
+  const liftScore = Math.log1p(excess) * Math.log1p(winPctLost);
 
-  return { ...candidate, severity, lift, confidence, failureRate, score };
+  /**
+   * Ranked against peers when a reference rate is available, against the
+   * player's own baseline otherwise.
+   *
+   * `excessRate` is how much more often this player misses the tactic than
+   * others of their strength do. That is the question the dashboard is
+   * actually asking, and lift cannot answer it: lift divides by the player's
+   * own average, which cancels out their skill level entirely.
+   *
+   * Shrunk by the same confidence term, so a thin sample cannot report a large
+   * excess. Damped by total cost on the same logarithmic footing as the lift
+   * path, so the two produce comparable magnitudes and dimensions without a
+   * reference rate still rank sensibly among those with one.
+   */
+  const { referenceMissRate } = options;
+  let excessRate: number | undefined;
+  let score = liftScore;
+
+  if (referenceMissRate !== undefined) {
+    excessRate = Math.max(0, (failureRate - referenceMissRate) * confidence);
+    score = Math.log1p(excessRate * EXCESS_RATE_SCALE) * Math.log1p(winPctLost);
+  }
+
+  return {
+    ...candidate,
+    severity,
+    lift,
+    confidence,
+    failureRate,
+    excessRate,
+    referenceMissRate,
+    score,
+  };
 }
+
+/**
+ * Puts an excess miss rate on a comparable footing with lift before damping.
+ *
+ * Rates are fractions — a large excess is 0.15 — while lift excess runs from
+ * zero into the tens. Without a scale the log damping flattens every rate to
+ * near zero and a dimension with a reference rate could never out-rank one
+ * without. Ten makes a 10-point excess weigh about as much as a 2x lift.
+ */
+const EXCESS_RATE_SCALE = 10;
 
 /**
  * Rank every candidate against every other, worst first.
@@ -190,7 +243,15 @@ export function scoreCandidate(
  */
 export function rankWeaknesses(
   candidates: WeaknessCandidate[],
-  options: { baselineSeverity?: number } = {},
+  options: {
+    baselineSeverity?: number;
+    /**
+     * Peer miss rates by motif. Candidates with an entry are ranked on how
+     * much they exceed it; the rest fall back to lift against the player's
+     * own baseline.
+     */
+    referenceMissRates?: Map<string, { missRate: number }>;
+  } = {},
 ): ScoredWeakness[] {
   const eligible = candidates.filter(
     (c) => c.opportunities >= MIN_OPPORTUNITIES && c.games >= MIN_GAMES,
@@ -201,7 +262,15 @@ export function rankWeaknesses(
     options.baselineSeverity ?? pooledSeverity(eligible);
 
   return eligible
-    .map((c) => scoreCandidate(c, { baselineSeverity }))
+    .map((c) =>
+      scoreCandidate(c, {
+        baselineSeverity,
+        referenceMissRate:
+          c.dimension === "motif"
+            ? options.referenceMissRates?.get(c.key)?.missRate
+            : undefined,
+      }),
+    )
     // A candidate at or below the player's own standard is not a weakness;
     // listing it would fill the dashboard with things they do fine.
     .filter((s) => s.score > 0)

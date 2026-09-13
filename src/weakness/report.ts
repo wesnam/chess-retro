@@ -6,6 +6,8 @@ import {
   examplesFor,
   type WeaknessExample,
 } from "./queries";
+import { RAPID_600_REFERENCE } from "./reference-data";
+import { referenceTable } from "./reference";
 import {
   MIN_GAMES,
   MIN_OPPORTUNITIES,
@@ -46,7 +48,14 @@ export function weaknessReport(
   const candidates = allCandidates(db, scope);
   const baseline = corpusBaseline(db, scope);
 
-  const ranked = rankWeaknesses(candidates, { baselineSeverity: baseline });
+  // Ranked against players of similar strength where a peer rate exists.
+  // Lift — cost against the player's OWN average — cannot answer "what am I
+  // bad at", because it divides out their skill level: a 3352 and a 590 both
+  // come out near 1.5x. Dimensions with no peer rate fall back to lift.
+  const ranked = rankWeaknesses(candidates, {
+    baselineSeverity: baseline,
+    referenceMissRates: referenceTable(RAPID_600_REFERENCE),
+  });
 
   // Both gates, not just the opportunity one: a pattern confined to one game
   // is suppressed too, and the empty state would otherwise under-report why

@@ -166,6 +166,124 @@ describe("shrinkage", () => {
   });
 });
 
+describe("ranking against a peer reference", () => {
+  it("ranks on how much the player exceeds the peer miss rate", () => {
+    // The question lift cannot answer. Both candidates cost the same and are
+    // equally common; only the peer comparison separates them.
+    const ranked = rankWeaknesses(
+      [
+        candidate({ key: "fork", opportunities: 100, failures: 14, winPctLost: 400 }),
+        candidate({ key: "pin", opportunities: 100, failures: 14, winPctLost: 400 }),
+      ],
+      {
+        baselineSeverity: 5,
+        referenceMissRates: new Map([
+          // Peers miss forks almost as often — barely a weakness.
+          ["fork", { missRate: 0.13 }],
+          // Peers rarely miss pins — this player is an outlier.
+          ["pin", { missRate: 0.02 }],
+        ]),
+      },
+    );
+
+    expect(ranked[0]?.key).toBe("pin");
+  });
+
+  it("drops a candidate the player handles as well as their peers", () => {
+    // `sacrifice` ranked second by lift on the real corpus while sitting
+    // within a point of a 3352-rated player's rate. Telling someone to drill
+    // their strongest area is worse than telling them nothing.
+    const ranked = rankWeaknesses(
+      [candidate({ key: "sacrifice", opportunities: 100, failures: 19 })],
+      {
+        baselineSeverity: 5,
+        referenceMissRates: new Map([["sacrifice", { missRate: 0.19 }]]),
+      },
+    );
+
+    expect(ranked).toEqual([]);
+  });
+
+  it("reports the peer rate and the excess alongside the score", () => {
+    const [top] = rankWeaknesses(
+      [candidate({ key: "pin", opportunities: 100, failures: 14 })],
+      {
+        baselineSeverity: 5,
+        referenceMissRates: new Map([["pin", { missRate: 0.04 }]]),
+      },
+    );
+
+    expect(top?.referenceMissRate).toBeCloseTo(0.04, 6);
+    expect(top?.failureRate).toBeCloseTo(0.14, 6);
+    // 10 points of excess, shrunk by confidence (100/125 = 0.8).
+    expect(top?.excessRate).toBeCloseTo(0.08, 6);
+  });
+
+  it("shrinks the excess so a thin sample cannot claim a large one", () => {
+    const thin = rankWeaknesses(
+      [candidate({ key: "pin", opportunities: 10, failures: 5, games: 4 })],
+      {
+        baselineSeverity: 5,
+        referenceMissRates: new Map([["pin", { missRate: 0.1 }]]),
+      },
+    );
+    const thick = rankWeaknesses(
+      [candidate({ key: "pin", opportunities: 400, failures: 200 })],
+      {
+        baselineSeverity: 5,
+        referenceMissRates: new Map([["pin", { missRate: 0.1 }]]),
+      },
+    );
+
+    // Identical raw rates, very different weight of evidence.
+    expect(thin[0]!.failureRate).toBeCloseTo(thick[0]!.failureRate, 6);
+    expect(thin[0]!.excessRate!).toBeLessThan(thick[0]!.excessRate!);
+  });
+
+  it("falls back to lift for dimensions with no peer rate", () => {
+    // Phase, piece, time and opening have no motif-keyed reference. They must
+    // still rank rather than silently vanishing.
+    const ranked = rankWeaknesses(
+      [
+        candidate({ dimension: "phase", key: "middlegame", winPctLost: 900 }),
+        candidate({ dimension: "motif", key: "pin", failures: 14, winPctLost: 400 }),
+      ],
+      {
+        baselineSeverity: 5,
+        referenceMissRates: new Map([["pin", { missRate: 0.02 }]]),
+      },
+    );
+
+    expect(ranked.map((r) => r.key)).toContain("middlegame");
+    expect(ranked.find((r) => r.key === "middlegame")?.excessRate).toBeUndefined();
+  });
+
+  it("ignores a reference rate for a non-motif dimension", () => {
+    // Keys can collide across dimensions; a phase named like a motif must not
+    // pick up its rate.
+    const [top] = rankWeaknesses(
+      [candidate({ dimension: "piece", key: "pin", winPctLost: 900 })],
+      {
+        baselineSeverity: 5,
+        referenceMissRates: new Map([["pin", { missRate: 0.02 }]]),
+      },
+    );
+
+    expect(top?.referenceMissRate).toBeUndefined();
+  });
+
+  it("ranks on lift when no reference table is supplied at all", () => {
+    // A fresh install has no cohort yet and must still produce a dashboard.
+    const ranked = rankWeaknesses(
+      [candidate({ key: "fork", winPctLost: 900 })],
+      { baselineSeverity: 5 },
+    );
+
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0]?.excessRate).toBeUndefined();
+  });
+});
+
 describe("rankWeaknesses", () => {
   it("excludes candidates below the minimum exposure entirely", () => {
     // Being told to fix something seen three times is worse than being told

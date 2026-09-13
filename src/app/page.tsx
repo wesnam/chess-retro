@@ -165,11 +165,19 @@ function WeaknessCard({ weakness }: { weakness: RankedWeakness }) {
           label="Win probability lost"
           value={`${Math.round(weakness.winPctLost).toLocaleString()} pts`}
         />
-        <Stat
-          label="Versus your average"
-          value={`${weakness.lift.toFixed(1)}×`}
-          note={`${weakness.severity.toFixed(1)} pts per opportunity`}
-        />
+        {weakness.referenceMissRate !== undefined ? (
+          <Stat
+            label="Players at your level"
+            value={`${Math.round(weakness.referenceMissRate * 100)}% miss it`}
+            note={`you ${rate}% — ${rate - Math.round(weakness.referenceMissRate * 100)} points worse`}
+          />
+        ) : (
+          <Stat
+            label="Versus your average"
+            value={`${weakness.lift.toFixed(1)}×`}
+            note={`${weakness.severity.toFixed(1)} pts per opportunity`}
+          />
+        )}
       </dl>
 
       {weakness.examples.length > 0 && (
