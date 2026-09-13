@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Chessground } from "chessground";
 import type { Api } from "chessground/api";
 import type { Dests, Key } from "chessground/types";
@@ -23,6 +23,7 @@ export function Board({
   orientation,
   lastMove,
   bestMove,
+  liveMove,
   onMove,
   movableColor,
   dests,
@@ -31,6 +32,14 @@ export function Board({
   orientation: "white" | "black";
   lastMove?: [Key, Key];
   bestMove?: [Key, Key];
+  /**
+   * A second arrow, in a different colour, for what the engine is suggesting
+   * right now. Distinct from `bestMove` because the two answer different
+   * questions and can point different ways: `bestMove` is the stored verdict
+   * on the move that was played, this is the live search of the position on
+   * the board — and a reviewer needs to be able to tell which is which.
+   */
+  liveMove?: [Key, Key];
   /** Supply to make the board playable. Absent means display-only. */
   onMove?: (from: Key, to: Key) => void;
   /** Which side may be moved. Ignored when `onMove` is absent. */
@@ -50,6 +59,19 @@ export function Board({
    */
   const handler = useRef(onMove);
   handler.current = onMove;
+
+  /**
+   * Counts moves played ON the board, so the update effect below re-runs even
+   * when the caller rejected the move and no prop changed.
+   *
+   * chessground moves the piece on its own board BEFORE calling `after`. A
+   * rejected move therefore leaves the piece on the square it was dropped on
+   * while `fen`, `dests` and the rest stay identical — and identical
+   * dependencies mean the effect does not re-run, so nothing ever puts it
+   * back. The board would sit disagreeing with the position being analysed
+   * until the reviewer stepped away, with nothing said and nothing thrown.
+   */
+  const [moveCount, setMoveCount] = useState(0);
 
   /**
    * Whether this board is interactive, read once for the life of the board.
@@ -89,7 +111,11 @@ export function Board({
         free: false,
         showDests: true,
         events: {
-          after: (from, to) => handler.current?.(from, to),
+          after: (from, to) => {
+            handler.current?.(from, to);
+            // Always, not only when the move was accepted: see `moveCount`.
+            setMoveCount((played) => played + 1);
+          },
         },
       },
     });
@@ -105,6 +131,7 @@ export function Board({
   // render would re-run these effects on every unrelated re-render.
   const lastMoveKey = lastMove?.join("");
   const bestMoveKey = bestMove?.join("");
+  const liveMoveKey = liveMove?.join("");
   // Same reasoning for the legal-move map, which is a new Map every render.
   const destsKey = dests
     ? [...dests].map(([from, to]) => `${from}${to.join("")}`).join("|")
@@ -138,14 +165,24 @@ export function Board({
         : {}),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fen, orientation, lastMoveKey, onMove, movableColor, destsKey]);
+  }, [fen, orientation, lastMoveKey, onMove, movableColor, destsKey, moveCount]);
 
   useEffect(() => {
-    api.current?.setAutoShapes(
-      bestMove ? [{ orig: bestMove[0], dest: bestMove[1], brush: "green" }] : [],
-    );
+    // Set in one call, never two: `setAutoShapes` REPLACES the whole set, so
+    // a second call for the live arrow would erase the stored best-move one
+    // and leave whichever effect ran last as the only arrow on the board.
+    const shapes = [];
+    if (bestMove) {
+      shapes.push({ orig: bestMove[0], dest: bestMove[1], brush: "green" });
+    }
+    if (liveMove) {
+      // Blue, and drawn second so it sits on top where the two coincide: the
+      // live arrow is the one that moves, and it should be the one you see.
+      shapes.push({ orig: liveMove[0], dest: liveMove[1], brush: "blue" });
+    }
+    api.current?.setAutoShapes(shapes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bestMoveKey]);
+  }, [bestMoveKey, liveMoveKey]);
 
   return <div className="board-wrap" ref={mount} />;
 }

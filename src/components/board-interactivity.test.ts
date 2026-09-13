@@ -73,6 +73,18 @@ function withDom(): Probe {
   };
 }
 
+/**
+ * Let chessground's scheduled redraw run.
+ *
+ * Drawing a shape queues an SVG render through `requestAnimationFrame`. Tearing
+ * the DOM down before it fires leaves it calling `createElementNS` on a
+ * document that no longer exists — which surfaces as an unhandled error beside
+ * a passing test, the most confusing way for this to fail.
+ */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 10));
+}
+
 describe("a chessground board's input listeners", () => {
   it("are bound when it is created playable", async () => {
     const probe = withDom();
@@ -108,6 +120,52 @@ describe("a chessground board's input listeners", () => {
       });
 
       expect(probe.events).not.toContain("mousedown");
+    } finally {
+      probe.cleanup();
+    }
+  });
+});
+
+/**
+ * Both arrows, together.
+ *
+ * `setAutoShapes` REPLACES the whole set rather than adding to it, so drawing
+ * the stored best-move arrow and the live engine arrow in two separate calls
+ * leaves only whichever ran last. They have to be set in one call, and this is
+ * what says so.
+ */
+describe("drawing more than one arrow", () => {
+  it("keeps both when they are set together", async () => {
+    const probe = withDom();
+    try {
+      const { Chessground } = await import("chessground");
+      const api = Chessground(probe.board, { viewOnly: true });
+
+      api.setAutoShapes([
+        { orig: "e2", dest: "e4", brush: "green" },
+        { orig: "d2", dest: "d4", brush: "blue" },
+      ]);
+
+      expect(api.state.drawable.autoShapes).toHaveLength(2);
+      await settle();
+    } finally {
+      probe.cleanup();
+    }
+  });
+
+  it("loses the first when they are set one at a time", async () => {
+    const probe = withDom();
+    try {
+      const { Chessground } = await import("chessground");
+      const api = Chessground(probe.board, { viewOnly: true });
+
+      api.setAutoShapes([{ orig: "e2", dest: "e4", brush: "green" }]);
+      api.setAutoShapes([{ orig: "d2", dest: "d4", brush: "blue" }]);
+
+      // The mistake this pins: the green arrow is gone, not accompanied.
+      expect(api.state.drawable.autoShapes).toHaveLength(1);
+      expect(api.state.drawable.autoShapes[0]?.brush).toBe("blue");
+      await settle();
     } finally {
       probe.cleanup();
     }

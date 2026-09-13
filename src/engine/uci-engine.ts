@@ -48,6 +48,24 @@ export type PositionAnalysis = {
   depth: number;
 };
 
+/** One deepening of a live search, as it is reported. */
+export type LiveInfo = {
+  depth: number;
+  /** From the perspective of the side to move, as UCI reports it. */
+  score: Score;
+  /** Space-separated UCI, or absent on a line that carried no variation. */
+  pv: string | undefined;
+};
+
+export type LiveSearchOptions = {
+  onInfo: (info: LiveInfo) => void;
+  /**
+   * Ends the search. There is no other way to stop it, which is deliberate:
+   * the position on the screen changing is the only reason to.
+   */
+  signal: AbortSignal;
+};
+
 export const DEFAULT_DEPTH = 18;
 
 export class EngineError extends Error {}
@@ -60,6 +78,11 @@ export class UciEngine {
   private queue: Promise<void> = Promise.resolve();
   /** Waiters to reject if the process dies underneath them. */
   private pending = new Set<(error: EngineError) => void>();
+  /**
+   * The live search currently holding the engine, so a newer one can displace
+   * it rather than queue behind a search that ends only when its client does.
+   */
+  private liveSearch: AbortController | undefined;
   private readonly options: Required<EngineOptions>;
 
   constructor(options: EngineOptions = {}) {
@@ -209,6 +232,97 @@ export class UciEngine {
       };
     } finally {
       this.listeners.delete(collect);
+    }
+  }
+
+  /**
+   * Search a position open-endedly, reporting every deepening, until the
+   * caller aborts.
+   *
+   * The difference from `analyse` is what it is for. `analyse` answers "what
+   * is this position worth" once, to be stored; this one answers "what is the
+   * engine thinking, right now" continuously, for someone watching a board.
+   * There is no depth limit and no movetime: the search runs until the
+   * position on the screen changes, which is the only thing that should end
+   * it.
+   *
+   * Shares the queue with `analyse`, so a live search and a stored analysis
+   * cannot interleave their `position` and `go` commands on one stdin.
+   */
+  analyseLive(fen: string, options: LiveSearchOptions): Promise<void> {
+    // Displace the search already running, if there is one.
+    //
+    // A live search ends only when its own client goes away, so without this a
+    // second one would queue behind the first for as long as that client kept
+    // watching — a second tab, or the same tab's previous position when its
+    // abort has not landed yet, would sit on "Thinking…" indefinitely with no
+    // error and no explanation. The newest position asked about is the one
+    // someone is looking at, so it wins.
+    this.liveSearch?.abort();
+    const mine = new AbortController();
+    this.liveSearch = mine;
+
+    const run = this.queue.then(
+      () => this.analyseLiveNow(fen, options, mine),
+      () => this.analyseLiveNow(fen, options, mine),
+    );
+    this.queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private async analyseLiveNow(
+    fen: string,
+    { onInfo, signal }: LiveSearchOptions,
+    displaced: AbortController,
+  ): Promise<void> {
+    if (!this.process) throw new EngineError("Engine is not running");
+    // Checked after the queue rather than before it: the position may well
+    // have moved on while this waited its turn, and starting a search for a
+    // board nobody is looking at wastes the engine on the one that matters.
+    if (signal.aborted || displaced.signal.aborted) return;
+
+    const report = (line: string) => {
+      if (!line.startsWith("info ")) return;
+      const parsed = parseInfo(line);
+      if (parsed) {
+        onInfo({ depth: parsed.depth, score: parsed.score, pv: parsed.line });
+      }
+    };
+
+    this.listeners.add(report);
+    try {
+      this.send(`position fen ${fen}`);
+      // Infinite rather than depth-limited: a live panel is watched, and an
+      // engine that stopped at depth 18 would sit there looking broken while
+      // the person is still reading the position.
+      this.send("go infinite");
+
+      // Ends on either: the client going away, or a newer search taking
+      // the engine over.
+      await new Promise<void>((resolve) => {
+        if (signal.aborted || displaced.signal.aborted) {
+          resolve();
+          return;
+        }
+        const done = () => resolve();
+        signal.addEventListener("abort", done, { once: true });
+        displaced.signal.addEventListener("abort", done, { once: true });
+      });
+    } finally {
+      // Before the drain, not after: the drain waits for a `bestmove`, and
+      // leaving this attached would report the info lines of the NEXT search
+      // to a caller that has already gone away.
+      this.listeners.delete(report);
+      // Only if this search is still the one holding the engine: a newer one
+      // has already claimed the slot, and clearing it would let a third search
+      // fail to displace that one.
+      if (this.liveSearch === displaced) this.liveSearch = undefined;
+      // `go infinite` stops for nothing else, and the `bestmove` it owes must
+      // be drained here or the next search resolves on this one's reply.
+      await this.abortSearch();
     }
   }
 

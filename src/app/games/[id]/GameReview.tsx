@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Key } from "chessground/types";
 import { Board } from "@/components/Board";
 import { EvalGraph } from "@/components/EvalGraph";
 import {
@@ -15,6 +16,18 @@ import {
   explainMove,
   formatUci,
 } from "@/games/explain-move";
+import {
+  playExploration,
+  startExploration,
+  undoExploration,
+  type Exploration,
+} from "@/games/exploration";
+import { legalDests } from "@/puzzles/theme";
+import {
+  LiveAnalysisPanel,
+  liveMoveArrow,
+  useLiveAnalysis,
+} from "./LiveAnalysis";
 
 /**
  * The interactive review: one board, a clickable move list, an eval bar and an
@@ -49,14 +62,31 @@ export function GameReview({
   );
   const lastPosition = review.lastPositionIndex;
 
+  /**
+   * The line being explored off the game, or undefined when the board is
+   * showing the game itself.
+   *
+   * Cleared whenever the position changes: an exploration belongs to the
+   * position it branched from, and carrying it to the next move would show a
+   * line that was never played from a position it was never played in.
+   */
+  const [exploring, setExploring] = useState<Exploration | undefined>();
+  const [engineOn, setEngineOn] = useState(false);
+
   const step = useCallback(
     (delta: number) => {
+      setExploring(undefined);
       setIndex((current) =>
         Math.min(lastPosition, Math.max(0, current + delta)),
       );
     },
     [lastPosition],
   );
+
+  const jumpTo = useCallback((next: number) => {
+    setExploring(undefined);
+    setIndex(next);
+  }, []);
 
   /**
    * Positions the user should actually look at: their own inaccuracies,
@@ -82,6 +112,7 @@ export function GameReview({
 
   const jumpToMistake = useCallback(
     (direction: 1 | -1) => {
+      setExploring(undefined);
       setIndex((current) => {
         const next =
           direction === 1
@@ -135,20 +166,77 @@ export function GameReview({
   // tying the board, the bar and the highlight to three different indexing
   // schemes is how they quietly drift apart later.
   const currentMove = moves.find((move) => move.ply === index);
-  const score = currentMove ? whitePovScore(currentMove) : undefined;
+  const storedScore = currentMove ? whitePovScore(currentMove) : undefined;
+
+  // What the board is actually showing: the explored line when there is one,
+  // the game position otherwise.
+  const shownFen = exploring?.fen ?? position?.fen;
+
+  /**
+   * Off the game line, every stored number is about a position that is no
+   * longer on the board.
+   *
+   * The eval bar, the score readout, the verdict and the scoresheet cursor all
+   * describe the move that was PLAYED at this index. Leaving them up while an
+   * explored position is shown is the exact failure this project keeps naming:
+   * the board showing one position while the evaluation beside it describes
+   * another. Playing the engine's suggestion and watching the bar not move
+   * reads as the engine contradicting itself.
+   *
+   * So they are withdrawn rather than recomputed. What the explored position
+   * is worth is a question only the engine can answer, and the live panel is
+   * where that answer already appears.
+   */
+  const score = exploring ? undefined : storedScore;
   const fraction = evalBarFraction(score);
+
+  const play = useCallback(
+    (from: Key, to: Key) => {
+      setExploring((current) => {
+        // The first move off the game line starts the exploration; every one
+        // after it extends the line already in hand.
+        const line =
+          current ?? (shownFen ? startExploration(shownFen) : undefined);
+        if (!line) return current;
+        // An illegal move leaves the line as it was rather than clearing it.
+        return playExploration(line, from, to) ?? line;
+      });
+    },
+    [shownFen],
+  );
+
+  // Legal moves for whatever is on the board. Without them chessground permits
+  // any drag at all, and a bishop moved like a rook would be "explored".
+  const dests = useMemo(
+    () => (shownFen ? legalDests(shownFen) : undefined),
+    [shownFen],
+  );
+
+  // The engine analyses what is on the board, explored line included — that
+  // is the whole point of being able to play a move here.
+  const liveState = useLiveAnalysis(shownFen ?? "", engineOn && !!shownFen);
 
   if (!position) return null;
 
   return (
     <div className="review">
       <div className="review-board">
-        <EvalBar fraction={fraction} orientation={review.orientation} />
-        <Board
-          fen={position.fen}
+        <EvalBar
+          fraction={fraction}
           orientation={review.orientation}
-          lastMove={position.lastMove}
-          bestMove={position.bestMove}
+          unknown={!!exploring}
+        />
+        <Board
+          fen={shownFen ?? position.fen}
+          orientation={review.orientation}
+          lastMove={exploring ? exploring.lastMove : position.lastMove}
+          // The stored verdict belongs to the game line. Off the line it is
+          // an answer to a question nobody asked.
+          bestMove={exploring ? undefined : position.bestMove}
+          liveMove={liveMoveArrow(liveState)}
+          onMove={play}
+          movableColor={sideToMoveColor(shownFen ?? position.fen)}
+          dests={dests}
         />
       </div>
 
@@ -157,11 +245,30 @@ export function GameReview({
           index={index}
           last={lastPosition}
           onStep={step}
-          onJump={setIndex}
+          onJump={jumpTo}
           onJumpToMistake={jumpToMistake}
           mistakeCount={mistakePositions.length}
           score={score}
         />
+
+        {/*
+          Above the stored verdict, because when a line is being explored the
+          verdict below is about the game and this is about the board.
+        */}
+        <LiveAnalysisPanel
+          state={liveState}
+          fen={shownFen ?? position.fen}
+          enabled={engineOn}
+          onToggle={setEngineOn}
+        />
+
+        {exploring && exploring.moves.length > 0 && (
+          <ExplorationLine
+            line={exploring}
+            onUndo={() => setExploring((current) => current && undoExploration(current))}
+            onReset={() => setExploring(undefined)}
+          />
+        )}
         {/*
           The tactic was available at the position the ply was played FROM,
           which is position index + 1 in ply terms. Keyed off `index + 1` so
@@ -169,17 +276,24 @@ export function GameReview({
           than one step after it.
         */}
         <MoveVerdict
-          move={moves.find((m) => m.ply === index + 1)}
+          // Withdrawn off the game line: it accuses the reader of a move that
+          // is not playable from the position they are looking at.
+          move={exploring ? undefined : moves.find((m) => m.ply === index + 1)}
           // The following ply's stored line is the engine's refutation of
           // this move — what the opponent does about it.
           next={moves.find((m) => m.ply === index + 2)}
-          missed={missedMotifs[index + 1]}
+          missed={exploring ? undefined : missedMotifs[index + 1]}
           analysed={analysed}
         />
+        {/*
+          Kept as-is while exploring, unlike the bar and the verdict: the
+          cursor marks where the line BRANCHED FROM, which is orienting rather
+          than misleading, and clicking any move is the way back to the game.
+        */}
         <ScoreSheet
           moves={moves}
           index={index}
-          onSelect={setIndex}
+          onSelect={jumpTo}
           analysed={analysed}
           missedMotifs={missedMotifs}
         />
@@ -191,9 +305,49 @@ export function GameReview({
           points={review.graph}
           current={index}
           lastPositionIndex={review.lastPositionIndex}
-          onSelect={setIndex}
+          onSelect={jumpTo}
         />
       )}
+    </div>
+  );
+}
+
+/** Which side may be moved on a position, for chessground. */
+function sideToMoveColor(fen: string): "white" | "black" {
+  return fen.split(/\s+/)[1] === "b" ? "black" : "white";
+}
+
+/**
+ * The line being explored, and the way back out of it.
+ *
+ * Shown only once a move has been played, so the review is not cluttered by
+ * an empty branch on every position.
+ */
+function ExplorationLine({
+  line,
+  onUndo,
+  onReset,
+}: {
+  line: Exploration;
+  onUndo: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="exploration">
+      <p className="exploration-head">
+        <span className="exploration-label">Exploring</span>
+        <span className="exploration-moves">
+          {line.moves.map((move) => move.san).join(" ")}
+        </span>
+      </p>
+      <div className="exploration-controls">
+        <button type="button" onClick={onUndo}>
+          ← Take back
+        </button>
+        <button type="button" onClick={onReset}>
+          Back to the game
+        </button>
+      </div>
     </div>
   );
 }
@@ -298,9 +452,17 @@ function Legend() {
 function EvalBar({
   fraction,
   orientation,
+  unknown = false,
 }: {
   fraction: number;
   orientation: "white" | "black";
+  /**
+   * No stored evaluation applies to what is on the board — an explored line.
+   * Greyed rather than left at its last value: a bar that keeps showing the
+   * game's number beside a position that is not the game's is worse than one
+   * that admits it does not know.
+   */
+  unknown?: boolean;
 }) {
   const whitePercent = fraction * 100;
   return (
@@ -309,8 +471,13 @@ function EvalBar({
       // Flipped with the board, so the reviewer's own side is always at the
       // bottom of the bar as well as the board.
       data-flipped={orientation === "black" ? "true" : "false"}
+      data-unknown={unknown ? "true" : "false"}
       role="img"
-      aria-label={`White has ${whitePercent.toFixed(0)}% winning chances`}
+      aria-label={
+        unknown
+          ? "No stored evaluation for this position"
+          : `White has ${whitePercent.toFixed(0)}% winning chances`
+      }
     >
       <div className="eval-bar-white" style={{ height: `${whitePercent}%` }} />
     </div>

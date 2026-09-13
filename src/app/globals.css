@@ -1095,3 +1095,94 @@ button.move-slot:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* --------------------------------------------------- live engine analysis */
+
+.live-panel {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 0.55rem 0.7rem;
+}
+
+.live-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.live-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0.45rem 0 0.3rem;
+}
+
+.live-score {
+  font-size: 1.15rem;
+  font-weight: 600;
+  /* Tabular, so the number does not jitter sideways as the search deepens. */
+  font-variant-numeric: tabular-nums;
+}
+
+.live-depth,
+.live-waiting {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0.4rem 0 0;
+}
+
+.live-pv {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text);
+  /* The line grows and shrinks as the engine changes its mind; letting it
+     reflow the panel would shift everything below it on every deepening. */
+  max-height: 3.9rem;
+  overflow: hidden;
+}
+
+.exploration {
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+}
+
+.exploration-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.45rem;
+  flex-wrap: wrap;
+}
+
+.exploration-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.exploration-moves {
+  font-size: 0.9rem;
+}
+
+.exploration-controls {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.exploration-controls button {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* No stored evaluation applies to an explored position: the bar says so
+   rather than keeping the game's number beside a position that is not it. */
+.eval-bar[data-unknown="true"] {
+  opacity: 0.3;
+}

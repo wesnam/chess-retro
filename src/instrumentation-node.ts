@@ -1,5 +1,7 @@
 import { reclaimOnce, stopJob } from "@/analysis/job-singleton";
 import { getDb } from "@/db/client";
+import { disposeLiveEngine } from "@/engine/live";
+import { disposeEngine } from "@/engine/singleton";
 import { importOpenings } from "@/ingest/openings";
 
 /**
@@ -27,12 +29,16 @@ export function registerNode(): void {
   }
 
   // Stop engines on the way out, rather than orphaning Stockfish processes
-  // that would sit holding memory until the machine is rebooted.
+  // that would sit holding memory until the machine is rebooted. Every engine
+  // holder has to be named here: the batch pool, the review singleton, and the
+  // live one — each is a separate process, and one left out is one leaked.
   let stopping = false;
   const shutdown = () => {
     if (stopping) return;
     stopping = true;
     stopJob();
+    disposeEngine();
+    disposeLiveEngine();
   };
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

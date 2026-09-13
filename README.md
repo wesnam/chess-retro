@@ -27,7 +27,7 @@ Early development. Built as a sequence of vertical slices, each usable on its ow
 | 08 | **Dashboard ranking your top weaknesses** | ✅ done |
 | 09 | **Plain-English coaching on each weakness** | ✅ done |
 | 10 | **Puzzle practice matched to weaknesses** | ✅ done |
-| 11 | Live engine analysis in the browser | |
+| 11 | **Live engine analysis in the browser** | ✅ done |
 | 12 | Incremental sync and release readiness | |
 
 ## Requirements
@@ -160,6 +160,37 @@ flowchart LR
     G --> H[Board, playable]
 ```
 
+**Analysis is live, and the board is yours.** Stepping through a reviewed game shows the stored
+verdict on the move that was played; switching the engine on shows what Stockfish thinks of the
+position *now*, deepening as you watch. Any legal move can be played on the board to ask "what if I
+had played this instead" — the engine follows you into the variation, and "Back to the game" returns.
+
+```mermaid
+sequenceDiagram
+    participant B as GameReview (browser)
+    participant R as /api/live
+    participant E as Live Stockfish
+
+    B->>R: POST { fen } — the position on the board
+    R->>R: readLiveRequest: a real board, no newline
+    R->>E: position fen … / go infinite
+    loop until the position changes
+        E-->>R: info depth N score … pv …
+        R-->>B: {"type":"info", …}
+        B->>B: applyInfo — depth never goes backwards
+    end
+    Note over B: step, jump, or play a move
+    B--xR: fetch aborted
+    R->>E: stop
+    E-->>R: bestmove (drained)
+```
+
+`go infinite` stops for no timer, so the `AbortController` in the browser, the request's `abort` on
+the server and the drained `bestmove` on the engine are one chain — break any link and Stockfish
+keeps searching a position nobody is looking at. Two things besides the disconnect can end a search,
+and both exist because that chain is the only thing holding a *shared* engine: a newer search
+displaces an older one, and a ten-minute ceiling catches a disconnect that is never reported.
+
 ## Development notes
 
 - **Database access** goes through `getDb()`, which memoises the connection on `globalThis` so dev-mode
@@ -268,6 +299,56 @@ flowchart LR
 - **The stored puzzle FEN is one move too early, always.** The position is the one before the
   opponent's setup move, so `movesUci[0]` must be applied before display. `openPuzzle` is the only
   place allowed to read the stored FEN, so no caller can forget.
+- **The live search has its own engine process.** Not the `getEngine()` singleton: `analyse` calls are
+  serialised per engine, so a live search opened while a game was being analysed would queue behind a
+  search of every position in that game and the panel would sit blank for minutes with no clue why.
+  Every engine holder must also be disposed in `instrumentation-node.ts` — the batch pool, the review
+  singleton and the live one are three separate processes, and one left out is one leaked.
+- **`go infinite` stops for nothing but `stop`.** There is no depth limit and no movetime on a live
+  search, because it is being watched and an engine that halted at depth 18 looks broken. What ends it
+  is the client disconnecting: the browser's `AbortController` closes the response body, the route's
+  `request.signal` fires, and `analyseLive` sends `stop` and drains the `bestmove` it is still owed.
+  Skip that drain and the NEXT search resolves on this one's reply — one position's evaluation
+  reported under another's, silently. A ten-minute ceiling in the route is the backstop: the whole
+  lifecycle otherwise rests on one abort signal, and a disconnect that is never reported would hold
+  the shared engine for the life of the process.
+- **A new live search displaces the one running, rather than queueing behind it.** They share the
+  engine's queue with `analyse`, and a live search ends only when *its own* client goes away — so a
+  second tab, or the same tab before its abort has landed, would otherwise wait for the first reader
+  to close the page. The symptom is the worst kind: "Thinking…" forever, no error, nothing logged.
+  The newest position asked about is the one someone is looking at, so it wins.
+- **The client waits 150ms before asking.** Holding the right arrow through a sixty-move game changes
+  the position sixty times; without the debounce that is sixty searches started and stopped, and the
+  engine spends the run being interrupted rather than analysing anything.
+- **Live depth never goes backwards.** Stockfish reports a lower depth mid-search often enough to
+  matter, from a new iteration's first lines and from helper threads. Accepting those walks the
+  evaluation back through numbers already superseded, so the panel flickers between two assessments
+  while the engine is quite sure of one.
+- **The FEN in a live request is validated, not escaped.** It becomes a `position fen …` line on the
+  engine's stdin and UCI is a line protocol, so an embedded newline would end that command and make
+  everything after it a command of the caller's choosing. No real position contains one, so it is
+  refused outright — and the board is then parsed, because a string can pass the character check and
+  still not be a position.
+- **`setAutoShapes` replaces the whole set.** The stored best-move arrow and the live engine arrow
+  have to be set in ONE call; drawing them in two effects leaves only whichever ran last. They are
+  deliberately different colours because they answer different questions and can point different ways.
+- **Making the review board playable is a construction-time decision.** It is the same `viewOnly`
+  trap that shipped the practice feature dead — see the chessground note below. `review-board.test.ts`
+  drives the real board with the review's own props so a regression is loud rather than silent.
+- **A rejected move still has to resync the board.** chessground moves the piece on its own board
+  *before* calling `after`, so a move the caller turns down leaves it on the square it was dropped on
+  while every prop stays identical — and identical dependencies mean the update effect does not
+  re-run, so nothing puts it back. `Board` counts moves played on it and depends on that count, so
+  the resync happens whether or not the position moved on.
+- **Off the game line, every stored number is withdrawn.** The eval bar greys out and the verdict
+  disappears while a line is being explored, because both describe the move played at that index and
+  neither is about the position on the board. Leaving them up is precisely "the board showing one
+  position while the evaluation beside it describes another" — and playing the engine's own
+  suggestion only to watch the bar not move reads as the engine contradicting itself. The scoresheet
+  cursor deliberately stays: it marks where the line branched from.
+- **An exploration is a value, never a mutable board.** Every operation returns a new one. A `Chess`
+  instance threaded through React state is shared by reference, so any re-render that replayed a move
+  would apply it twice and the board and the engine would disagree about the position.
 - **Tests are colocated** as `*.test.ts`. Files named `*.slow.test.ts` spawn a real Stockfish binary
   and are excluded from the default run.
 - Vitest 5 prints an engine warning on odd-numbered Node releases such as 25. It runs correctly.
