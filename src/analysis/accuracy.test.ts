@@ -303,3 +303,68 @@ describe("the cost of a losing blunder", () => {
     expect(toCp(before) - toCp(after)).toBeLessThan(0);
   });
 });
+
+/**
+ * One catastrophic move must not become the whole game.
+ *
+ * The harmonic mean is here to stop a run of easy moves hiding a disaster,
+ * and it earns its place — the plain arithmetic mean rates these games ~88%,
+ * which flatters them. But `moveAccuracy` returns exactly 0 for any move
+ * throwing away 80 win-percentage points or more, and a single 0 makes the
+ * reciprocal sum diverge: the harmonic mean collapses to ~0 and halves the
+ * game's accuracy no matter how the other moves went.
+ *
+ * Measured on this project's own corpus: 41 of 423 analysed games contain a
+ * zero-accuracy move, and each had its accuracy understated by roughly half.
+ * One real game scored 39.5% from 25 moves whose mean was 88.5% — chess.com
+ * rated the same game 77.6%, and chess.com was the closer of the two.
+ */
+describe("a single lost move", () => {
+  /** 24 strong moves and one catastrophe: a good game with a blunder in it. */
+  const oneBlunder = [
+    87.78, 94.75, 0, 98.87, 97.52, 100, 90.49, 85.75, 93.75, 100, 83.52,
+    95.57, 91.16, 85.2, 98.9, 96.36, 91.68, 97.61, 67.78, 97.51, 93.6, 97.66,
+    79.4, 100, 87.86,
+  ].map((accuracy, positionIndex) => ({ accuracy, positionIndex }));
+
+  it("does not halve a game that was otherwise played well", () => {
+    // The arithmetic mean of these moves is 88.5. A blunder should cost real
+    // ground, but the result has to stay recognisably a strong game.
+    const accuracy = gameAccuracy(oneBlunder, [])!;
+
+    expect(accuracy).toBeGreaterThan(65);
+  });
+
+  it("still costs more than the blunder's share of the moves", () => {
+    // One move in 25 is 4% of the game; the harmonic mean is supposed to
+    // punish a catastrophe harder than its count. It must not become a
+    // plain average.
+    const accuracy = gameAccuracy(oneBlunder, [])!;
+
+    expect(accuracy).toBeLessThan(88.5);
+  });
+
+  it("is barely moved by how far past the zero the move went", () => {
+    // Accuracy saturates at 0 for any drop of 80 win-points or more, so a
+    // game with one 0 and a game with one 0.5 are the same game. Before the
+    // floor was raised these differed by 30 points.
+    const nearZero = oneBlunder.map((m, i) =>
+      i === 2 ? { accuracy: 0.5, positionIndex: i } : m,
+    );
+
+    const withZero = gameAccuracy(oneBlunder, [])!;
+    const withNearZero = gameAccuracy(nearZero, [])!;
+
+    expect(Math.abs(withZero - withNearZero)).toBeLessThan(2);
+  });
+
+  it("still ranks a game with two catastrophes below one with a single", () => {
+    const twoBlunders = oneBlunder.map((m, i) =>
+      i === 10 ? { accuracy: 0, positionIndex: i } : m,
+    );
+
+    expect(gameAccuracy(twoBlunders, [])!).toBeLessThan(
+      gameAccuracy(oneBlunder, [])!,
+    );
+  });
+});

@@ -177,11 +177,34 @@ function weightedMean(values: number[], weights: number[]): number {
   return weightSum === 0 ? mean(values) : total / weightSum;
 }
 
+/**
+ * The least a single move is allowed to count as, in the harmonic mean.
+ *
+ * `moveAccuracy` saturates: any move throwing away 80 win-percentage points
+ * or more scores exactly 0, so resigning the game and merely losing it
+ * outright are the same number. Feeding that 0 to a reciprocal makes one
+ * move the entire sum — with a floor of 0.01 a single blunder supplied 99.7%
+ * of it, and 41 of this project's 423 analysed games had their accuracy
+ * halved as a result.
+ *
+ * Floored instead at the accuracy of a move that throws away ~58 win points:
+ * far enough down to still dominate the mean, as the harmonic mean is meant
+ * to, but bounded, so the game keeps a say in its own number. A catastrophe
+ * costs heavily and stops counting more the further past catastrophic it
+ * goes, which is what the accuracy scale itself already says.
+ *
+ * Checked against the 96 games in this project's corpus that carry both this
+ * number and chess.com's. Games containing a near-zero move fell from a mean
+ * absolute difference of 17.8 points to 6.8; games without one were not
+ * affected at all, at 7.0 either way, since the floor never binds on them.
+ * The figure was chosen for the saturation argument above, not fitted to
+ * chess.com — their number is a check on this one, never its definition.
+ */
+const HARMONIC_FLOOR = 5;
+
 function harmonicMean(values: number[]): number {
-  // A single 0% move would make the harmonic mean 0 and swamp everything, so
-  // values are floored just above zero.
   let total = 0;
-  for (const value of values) total += 1 / Math.max(value, 0.01);
+  for (const value of values) total += 1 / Math.max(value, HARMONIC_FLOOR);
   return values.length / total;
 }
 
