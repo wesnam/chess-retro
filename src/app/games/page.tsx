@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { getDb } from "@/db/client";
 import { getUsername } from "@/settings/settings";
-import { countGames, listGames, type GameListRow } from "@/games/queries";
+import {
+  countGames,
+  listGames,
+  type GameListRow,
+  type MoveMarks,
+} from "@/games/queries";
 import { SyncButton } from "./SyncButton";
 import { AnalyzeAllButton } from "./AnalyzeAllButton";
 
@@ -71,6 +76,7 @@ function GameTable({ rows }: { rows: GameListRow[] }) {
             <th className="num">Rating</th>
             <th>Time</th>
             <th>Opening</th>
+            <th>Marks</th>
             <th />
           </tr>
         </thead>
@@ -106,6 +112,9 @@ function GameTable({ rows }: { rows: GameListRow[] }) {
                 )}
               </td>
               <td className="muted opening">{row.openingName ?? "—"}</td>
+              <td>
+                <Marks marks={row.marks} analysed={row.analysisStatus === "done"} />
+              </td>
               <td className="muted">
                 {row.analysisStatus === "done" ? "reviewed" : ""}
               </td>
@@ -114,6 +123,47 @@ function GameTable({ rows }: { rows: GameListRow[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * The six grades for one game, best to blunder.
+ *
+ * Shown only once the game is analysed: a row of zeroes on an unreviewed game
+ * reads as a flawless performance rather than an absent one.
+ *
+ * Grades the player never earned are dimmed rather than dropped, so the marks
+ * sit in the same six columns on every row and the eye can run down one grade
+ * without re-reading the labels.
+ */
+function Marks({ marks, analysed }: { marks: MoveMarks; analysed: boolean }) {
+  if (!analysed) return <span className="muted">—</span>;
+
+  const grades = [
+    { key: "best", symbol: "★", label: "best" },
+    { key: "excellent", symbol: "!", label: "excellent" },
+    { key: "good", symbol: "·", label: "good" },
+    { key: "inaccuracy", symbol: "?!", label: "inaccuracy" },
+    { key: "mistake", symbol: "?", label: "mistake" },
+    { key: "blunder", symbol: "??", label: "blunder" },
+  ] as const;
+
+  return (
+    <span className="marks">
+      {grades.map(({ key, symbol, label }) => {
+        const count = marks[key];
+        return (
+          <span
+            key={key}
+            className={`mark ${key}${count === 0 ? " none" : ""}`}
+            title={`${count} ${label}${count === 1 ? "" : "s"}`}
+          >
+            <span className="mark-symbol">{symbol}</span>
+            {count}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

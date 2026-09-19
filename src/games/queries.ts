@@ -1,6 +1,41 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { games, moveMotifs, moves } from "@/db/schema";
+
+/**
+ * How many of the player's own moves earned each mark.
+ *
+ * Every grade is present and zero when unearned, so a caller can render the
+ * six in a fixed order without checking for holes.
+ */
+export type MoveMarks = {
+  best: number;
+  excellent: number;
+  good: number;
+  inaccuracy: number;
+  mistake: number;
+  blunder: number;
+};
+
+const MARK_GRADES = [
+  "best",
+  "excellent",
+  "good",
+  "inaccuracy",
+  "mistake",
+  "blunder",
+] as const;
+
+function emptyMarks(): MoveMarks {
+  return {
+    best: 0,
+    excellent: 0,
+    good: 0,
+    inaccuracy: 0,
+    mistake: 0,
+    blunder: 0,
+  };
+}
 
 export type GameListRow = {
   id: string;
@@ -16,6 +51,8 @@ export type GameListRow = {
   opponentRating: number | null;
   openingName: string | null;
   analysisStatus: string;
+  /** The player's own moves by grade; all zero until the game is analysed. */
+  marks: MoveMarks;
 };
 
 /** Most recent first — the order a person expects to browse their own games. */
@@ -30,7 +67,7 @@ export function listGames(
     ? sql`${games.user} = ${user} AND ${games.timeClass} = ${timeClass}`
     : eq(games.user, user);
 
-  return db
+  const rows = db
     .select({
       id: games.id,
       url: games.url,
@@ -51,6 +88,71 @@ export function listGames(
     .orderBy(desc(games.endTime))
     .limit(limit)
     .all();
+
+  const marks = markCounts(
+    db,
+    user,
+    rows.map((row) => row.id),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    marks: marks.get(row.id) ?? emptyMarks(),
+  }));
+}
+
+/**
+ * Mark counts for a set of games, as one grouped query.
+ *
+ * Counted per game rather than per row so the list costs one query regardless
+ * of how many games it shows; a lookup inside the map would put a query per
+ * row on a page that renders two hundred.
+ *
+ * Scoped by user as well as game: one chess.com game is two rows when both
+ * players are tracked, and grouping by game alone would show each player the
+ * other's blunders.
+ */
+function markCounts(
+  db: Db,
+  user: string,
+  gameIds: string[],
+): Map<string, MoveMarks> {
+  const counts = new Map<string, MoveMarks>();
+  if (gameIds.length === 0) return counts;
+
+  const rows = db
+    .select({
+      gameId: moves.gameId,
+      classification: moves.classification,
+      total: sql<number>`count(*)`,
+    })
+    .from(moves)
+    .where(
+      and(
+        eq(moves.user, user),
+        eq(moves.isUserMove, true),
+        inArray(moves.gameId, gameIds),
+        isNotNull(moves.classification),
+      ),
+    )
+    .groupBy(moves.gameId, moves.classification)
+    .all();
+
+  for (const row of rows) {
+    // A classification the app no longer knows about is skipped rather than
+    // widening the row's shape with a key the renderer cannot place.
+    if (!isGrade(row.classification)) continue;
+
+    const marks = counts.get(row.gameId) ?? emptyMarks();
+    marks[row.classification] = row.total;
+    counts.set(row.gameId, marks);
+  }
+
+  return counts;
+}
+
+function isGrade(value: string | null): value is keyof MoveMarks {
+  return value !== null && (MARK_GRADES as readonly string[]).includes(value);
 }
 
 export type GameDetail = {

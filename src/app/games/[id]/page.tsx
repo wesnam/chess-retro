@@ -6,6 +6,12 @@ import { getGame, listMissedMotifs, listMoves } from "@/games/queries";
 import { AnalyzeButton } from "./AnalyzeButton";
 import { GameReview } from "./GameReview";
 import { positionForPly } from "@/games/position-move";
+import {
+  estimateRating,
+  fitPerformanceCurve,
+  splitEstimate,
+} from "@/weakness/performance-rating";
+import { referencePairs } from "@/weakness/performance-reference";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +96,14 @@ function AccuracyPanel({
     analysisDepth: number | null;
   };
 }) {
+  // Calibrated on chess.com's accuracy figures, so it is fed chess.com's
+  // number for this game. Passing our Stockfish accuracy would push it
+  // through a curve built for a different formula — close, but not the same
+  // scale, and the difference lands silently in the estimate.
+  const playedLike = splitEstimate(
+    estimateRating(PERFORMANCE_CURVE, game.ccAccuracyUser ?? Number.NaN),
+  );
+
   return (
     <div className="accuracy-panel">
       <div className="figure">
@@ -114,9 +128,31 @@ function AccuracyPanel({
           for comparison only
         </span>
       </div>
+
+      {playedLike && (
+        <div className="figure">
+          <span className="figure-label">Played like</span>
+          {/*
+            Centre and range are separated so the value can be read at the
+            panel's size without wrapping mid-parenthesis — but the range sits
+            directly under it, never omitted: the centre alone reads as a
+            rating this estimate cannot support.
+          */}
+          <span className="figure-value">{playedLike.centre}</span>
+          <span className="figure-note">
+            {playedLike.range} · from chess.com accuracy
+          </span>
+        </div>
+      )}
     </div>
   );
 }
+
+/**
+ * Fitted once per process rather than per request: the reference table is
+ * fixed at build time, so the curve never changes between games.
+ */
+const PERFORMANCE_CURVE = fitPerformanceCurve(referencePairs());
 
 /**
  * Which board position a `?ply=` link should open on.

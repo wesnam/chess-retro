@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createDb, type Db } from "@/db/client";
-import { games } from "@/db/schema";
+import { games, moves } from "@/db/schema";
 import { countGames, listGames } from "./queries";
 
 let db: Db;
@@ -118,5 +118,119 @@ describe("counting games", () => {
 
     expect(countGames(db, "alice").total).toBe(1);
     expect(countGames(db, "bob").total).toBe(2);
+  });
+});
+
+/**
+ * How many of each mark the player earned, per game.
+ *
+ * The list is where a player decides which game to open, and "3 blunders"
+ * tells them that far faster than a date and an opponent do.
+ */
+describe("move marks", () => {
+  function seedMove(
+    gameId: string,
+    ply: number,
+    classification: string,
+    options: { isUserMove?: boolean; user?: string } = {},
+  ) {
+    db.insert(moves)
+      .values({
+        gameId,
+        ply,
+        user: options.user ?? "alice",
+        timeClass: "blitz",
+        isUserMove: options.isUserMove ?? true,
+        color: "w",
+        fenBefore: "fen",
+        san: "e4",
+        uci: "e2e4",
+        piece: "p",
+        classification,
+      })
+      .run();
+  }
+
+  it("counts the player's moves by mark", () => {
+    seed({ id: "g1" });
+    seedMove("g1", 1, "best");
+    seedMove("g1", 3, "best");
+    seedMove("g1", 5, "good");
+    seedMove("g1", 7, "blunder");
+
+    const [row] = listGames(db, "alice");
+
+    expect(row!.marks).toEqual({
+      best: 2,
+      excellent: 0,
+      good: 1,
+      inaccuracy: 0,
+      mistake: 0,
+      blunder: 1,
+    });
+  });
+
+  it("ignores the opponent's moves", () => {
+    // The row is the player's own review; counting both sides would credit
+    // them with their opponent's good moves and blame them for the blunders.
+    seed({ id: "g1" });
+    seedMove("g1", 1, "best");
+    seedMove("g1", 2, "blunder", { isUserMove: false });
+
+    const [row] = listGames(db, "alice");
+
+    expect(row!.marks.best).toBe(1);
+    expect(row!.marks.blunder).toBe(0);
+  });
+
+  it("keeps each game's marks to itself", () => {
+    seed({ id: "g1", endTime: 2000 });
+    seed({ id: "g2", endTime: 1000 });
+    seedMove("g1", 1, "blunder");
+    seedMove("g2", 1, "best");
+    seedMove("g2", 3, "best");
+
+    const rows = listGames(db, "alice");
+
+    expect(rows.find((r) => r.id === "g1")!.marks.blunder).toBe(1);
+    expect(rows.find((r) => r.id === "g1")!.marks.best).toBe(0);
+    expect(rows.find((r) => r.id === "g2")!.marks.best).toBe(2);
+  });
+
+  it("counts nothing for a game that has not been analysed", () => {
+    // An unanalysed game has move rows with a null classification. Those must
+    // not land in any bucket, or an unreviewed game reads as a flawless one.
+    seed({ id: "g1" });
+    db.insert(moves)
+      .values({
+        gameId: "g1",
+        ply: 1,
+        user: "alice",
+        timeClass: "blitz",
+        isUserMove: true,
+        color: "w",
+        fenBefore: "fen",
+        san: "e4",
+        uci: "e2e4",
+        piece: "p",
+      })
+      .run();
+
+    const [row] = listGames(db, "alice");
+
+    expect(Object.values(row!.marks).every((n) => n === 0)).toBe(true);
+  });
+
+  it("does not borrow the other player's marks on a shared game", () => {
+    // One chess.com game is two rows when both players are tracked. Counting
+    // by game alone would merge both perspectives into each.
+    seed({ id: "shared", user: "alice" });
+    seed({ id: "shared", user: "bob" });
+    seedMove("shared", 1, "best", { user: "alice" });
+    seedMove("shared", 2, "blunder", { user: "bob" });
+
+    expect(listGames(db, "alice")[0]!.marks.best).toBe(1);
+    expect(listGames(db, "alice")[0]!.marks.blunder).toBe(0);
+    expect(listGames(db, "bob")[0]!.marks.blunder).toBe(1);
   });
 });

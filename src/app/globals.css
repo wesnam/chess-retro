@@ -1312,3 +1312,70 @@ button.move-slot:hover {
 .eval-bar[data-unknown="true"] {
   opacity: 0.3;
 }
+
+/* ----------------------------------------------------------- move marks */
+
+/*
+ * The six grades for one game, in the games list.
+ *
+ * Tabular figures and a fixed min-width keep the six groups in the same place
+ * on every row, so a column of blunders can be scanned down the page without
+ * reading a single label.
+ */
+.marks {
+  display: inline-flex;
+  gap: 0.45rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.mark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  min-width: 1.6rem;
+}
+
+.mark-symbol {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+/*
+ * A grade the player never earned stays in place but recedes, so the columns
+ * line up without a run of zeroes competing with the counts that matter.
+ */
+.mark.none {
+  opacity: 0.25;
+}
+
+.mark.best {
+  color: var(--accent);
+}
+
+.mark.excellent {
+  color: var(--ok);
+}
+
+.mark.good {
+  color: var(--muted);
+}
+
+/*
+ * Mistake reads amber and blunder red, following the evaluation graph rather
+ * than `.tag`, which paints both with `--danger`. Telling the two apart is the
+ * reason this column shows six grades instead of three.
+ */
+.mark.inaccuracy {
+  color: #d9a441;
+}
+
+.mark.mistake {
+  color: #e08b3e;
+}
+
+.mark.blunder {
+  color: var(--danger);
+}
