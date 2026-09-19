@@ -245,3 +245,57 @@ describe("coordinate precision", () => {
     expect(points[0]!.y).toBe(midline);
   });
 });
+
+/**
+ * The shaded area is drawn twice and clipped to each side of the midline, so
+ * White's advantage and Black's carry different colours. That only reads
+ * correctly if the fill is a single region bounded by the curve on one side
+ * and the midline on the other: anything else, clipped to a half, shades a
+ * region the player was never ahead in.
+ */
+describe("area path as a clip source", () => {
+  it("bounds the fill by the midline at both ends, whichever side the curve is on", () => {
+    // Starting and ending deep in Black's half. If the path closed along the
+    // bottom of the box instead, clipping to the lower half would shade the
+    // whole strip and show Black ahead from move one.
+    const { areaPath, midline, points } = graphGeometry({
+      points: [point(10, 1), point(20, 2)],
+      width: WIDTH,
+      height: HEIGHT,
+    });
+
+    const first = points[0]!;
+    const last = points.at(-1)!;
+    expect(areaPath.startsWith(`M ${first.x} ${midline}`)).toBe(true);
+    expect(areaPath).toContain(`L ${last.x} ${midline} Z`);
+  });
+
+  it("exposes a midline that halves the box, so the two clips tile it exactly", () => {
+    // The clip rectangles are built from this number: one 0..midline, one
+    // midline..height. A midline that is not half leaves a band drawn in
+    // neither colour, or one drawn in both.
+    const { midline } = graphGeometry({
+      points: [point(50, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+    });
+
+    expect(midline).toBe(HEIGHT / 2);
+    expect(HEIGHT - midline).toBe(midline);
+  });
+
+  it("keeps the fill contiguous across a crossing, so neither half is clipped short", () => {
+    // White clearly better, then Black clearly better. The path must run
+    // straight through the midline as one region; a break at the crossing
+    // would leave a wedge of the advantage unshaded on both sides.
+    const { areaPath } = graphGeometry({
+      points: [point(95, 1), point(5, 2)],
+      width: WIDTH,
+      height: HEIGHT,
+    });
+
+    // One subpath only: a single M, and no Z before the final one.
+    expect(areaPath.match(/M/g)).toHaveLength(1);
+    expect(areaPath.match(/Z/g)).toHaveLength(1);
+  });
+});

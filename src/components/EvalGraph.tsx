@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { graphGeometry, hitWidth } from "./eval-graph";
 import type { ReviewGraphPoint } from "@/games/review-model";
 
@@ -24,6 +24,10 @@ export function EvalGraph({
   lastPositionIndex: number;
   onSelect: (positionIndex: number) => void;
 }) {
+  // Clip paths are referenced by id, which is document-global. Two graphs on
+  // one page sharing an id would clip the second against the first.
+  const id = useId();
+
   const geometry = useMemo(
     () =>
       graphGeometry({
@@ -47,9 +51,38 @@ export function EvalGraph({
         role="img"
         aria-label="Evaluation across the game"
       >
-        {/* Black's half, so the shaded area reads against a dark ground. */}
+        {/*
+          The fill is drawn twice, each copy clipped to one side of equality,
+          so the colour itself says who is ahead. A single tone for both sides
+          reads as "White is winning" wherever the shaded mass is large —
+          cream is the light pieces' colour — even when the mass hangs below
+          the midline because Black is four pawns up.
+        */}
+        <defs>
+          <clipPath id={`${id}-above`}>
+            <rect x={0} y={0} width={WIDTH} height={geometry.midline} />
+          </clipPath>
+          <clipPath id={`${id}-below`}>
+            <rect
+              x={0}
+              y={geometry.midline}
+              width={WIDTH}
+              height={HEIGHT - geometry.midline}
+            />
+          </clipPath>
+        </defs>
+
         <rect x={0} y={0} width={WIDTH} height={HEIGHT} className="graph-ground" />
-        <path d={geometry.areaPath} className="graph-area" />
+        <path
+          d={geometry.areaPath}
+          className="graph-area white"
+          clipPath={`url(#${id}-above)`}
+        />
+        <path
+          d={geometry.areaPath}
+          className="graph-area black"
+          clipPath={`url(#${id}-below)`}
+        />
         <line
           x1={0}
           y1={geometry.midline}
@@ -75,6 +108,17 @@ export function EvalGraph({
               className={`graph-mark ${p.classification}`}
             />
           ))}
+
+        {/*
+          The legend the colours still need: a reader who has not seen the
+          board cannot know which tone is which side.
+        */}
+        <text x={6} y={12} className="graph-axis-label">
+          White
+        </text>
+        <text x={6} y={HEIGHT - 5} className="graph-axis-label">
+          Black
+        </text>
 
         {currentPoint && (
           <line

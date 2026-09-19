@@ -629,8 +629,37 @@ button.move-slot:hover {
   fill: #26221c;
 }
 
-.graph-area {
+/*
+ * Two tones, split at equality, because one tone could not say who was ahead.
+ * Cream is the light pieces' colour, so a large cream mass read as "White is
+ * winning" even when it hung below the midline with Black four pawns up.
+ *
+ * The pair differs in HUE, not just lightness: on a dark ground a near-black
+ * fill for Black would sink into the background exactly where the advantage
+ * is largest.
+ */
+.graph-area.white {
   fill: color-mix(in srgb, #e8e2d6 70%, transparent);
+}
+
+.graph-area.black {
+  fill: color-mix(in srgb, #6b7d94 70%, transparent);
+}
+
+/*
+ * The svg is drawn with preserveAspectRatio="none", so the viewBox is
+ * stretched to the element's width and anything inside it stretches too.
+ * Vector-effect keeps the glyphs at their true proportions; without it the
+ * labels smear horizontally by whatever factor the graph happens to be
+ * scaled by.
+ */
+.graph-axis-label {
+  fill: var(--muted);
+  font-size: 9px;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  vector-effect: non-scaling-size;
+  pointer-events: none;
 }
 
 .graph-line {
