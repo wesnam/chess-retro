@@ -92,7 +92,12 @@ export function AnalyzeAllButton() {
     <div className="job-bar">
       <div className="job-actions">
         <button onClick={() => send("start")} disabled={busy || running || nothingToDo}>
-          {state?.status === "paused" ? "Resume analysis" : "Analyze all games"}
+          {running && <span className="spinner" aria-hidden="true" />}
+          {running
+            ? " Analyzing…"
+            : state?.status === "paused"
+              ? "Resume analysis"
+              : "Analyze all games"}
         </button>
         {running && (
           <button onClick={() => send("pause")} disabled={busy}>

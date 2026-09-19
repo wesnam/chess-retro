@@ -1404,3 +1404,41 @@ button.move-slot:hover {
 .mark.blunder {
   color: var(--danger);
 }
+
+/* --------------------------------------------------------------- spinner */
+
+/*
+ * A turning ring for work that has no progress to report.
+ *
+ * Analysis of a single game gives no intermediate signal — the engine is
+ * asked for every position in turn and says nothing until it is done — so the
+ * only honest indicator is "still going", which is what a spinner says. The
+ * batch job, which does know how many games remain, shows its count instead.
+ */
+.spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  /* One transparent quarter is what makes the rotation visible at all. */
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spinner-turn 0.7s linear infinite;
+}
+
+@keyframes spinner-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/*
+ * Respect a viewer who has asked for less motion: the ring still reads as a
+ * busy indicator standing still, so it is shown rather than hidden.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

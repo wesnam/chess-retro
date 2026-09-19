@@ -37,7 +37,14 @@ export function AnalyzeButton({
   return (
     <div className="sync-bar">
       <button onClick={analyze} disabled={busy}>
-        {busy ? "Analyzing…" : label}
+        {busy ? (
+          <>
+            {/* aria-hidden: the button's own text already says "Analyzing". */}
+            <span className="spinner" aria-hidden="true" /> Analyzing…
+          </>
+        ) : (
+          label
+        )}
       </button>
       {busy && (
         <span className="sync-message">
