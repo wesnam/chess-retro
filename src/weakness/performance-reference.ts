@@ -14,18 +14,31 @@ import type { AccuracyRatingPair } from "./performance-rating";
  * estimate labelled as chess.com-style rather than feeding any internal
  * aggregate.
  *
- * Two honest limits, both visible in the residuals:
+ * Two honest limits:
  *
- * 1. **The relationship is not truly linear.** Bands 1400-1800 sit ~250 points
- *    above the fitted line while 2600-2800 sit ~350 below it, so a straight
- *    line understates the middle and overstates the top. A log transform fits
- *    worse (residual SD 218 vs 119), so the line stays — but its error is
- *    structured, not random, and the quoted band has to be wide enough to
- *    cover that.
+ * 1. **The relationship is not linear, and not even monotonic.** It was once
+ *    fitted as a straight line, which understated the middle and overstated
+ *    the top: fed each band's own mean accuracy it returned 1245 for band
+ *    1400-1599 (-255), 1421 for 1600-1799 (-279) and 3273 for 2800+ (+373)
+ *    — error larger than the +/-200 band quoted around it, so the true value
+ *    fell OUTSIDE the range shown. `fitPerformanceCurve` now joins the band
+ *    means instead, which is exact at every band.
+ *
+ *    Two pairs in this table INVERT: band 800-999 averages 69.1% against
+ *    600-799's 69.2%, and 1400-1599 averages 73.6% against 1200-1399's
+ *    74.6%. Accuracy genuinely does not separate those players. The fit
+ *    pools each inverted pair rather than sloping through it, so both bands
+ *    in a pair return their shared value — vaguer, but not wrong, and it
+ *    keeps a more accurate game from ever scoring below a less accurate one.
  *
  * 2. **The top and bottom bands are thin.** 2200 rests on 17 observations and
- *    2600 on 22, against 2,443 at band 400. The ends of the curve are the
- *    least trustworthy part of it.
+ *    2600 on 22, against 2,443 at band 400. `referencePairs` still expands
+ *    each band by its observation count, but the curve pools observations by
+ *    accuracy before fitting, so a band measured on 2,443 games contributes
+ *    one point like any other and no longer drags the fit through itself.
+ *    The ends remain the least trustworthy part of the curve: they rest on
+ *    the fewest games, and beyond them the curve holds its end value rather
+ *    than extrapolating.
  *
  * Sampling bias worth naming: a game only carries an accuracy when someone ran
  * a Game Review on it, and players plausibly review their interesting games

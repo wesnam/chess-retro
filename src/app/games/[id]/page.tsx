@@ -6,6 +6,7 @@ import { getGame, listMissedMotifs, listMoves } from "@/games/queries";
 import { AnalyzeButton } from "./AnalyzeButton";
 import { GameReview } from "./GameReview";
 import { positionForPly } from "@/games/position-move";
+import { tallyMarks, type MoveMarks } from "@/games/move-marks";
 import {
   estimateRating,
   fitPerformanceCurve,
@@ -53,7 +54,7 @@ export default async function GamePage({
       </p>
 
       {analysed ? (
-        <AccuracyPanel game={game} />
+        <AccuracyPanel game={game} marks={tallyMarks(moves)} />
       ) : (
         <AnalyzeButton gameId={id} />
       )}
@@ -89,12 +90,14 @@ export default async function GamePage({
 
 function AccuracyPanel({
   game,
+  marks,
 }: {
   game: {
     accuracyUser: number | null;
     ccAccuracyUser: number | null;
     analysisDepth: number | null;
   };
+  marks: MoveMarks;
 }) {
   // Calibrated on chess.com's accuracy figures, so it is fed chess.com's
   // number for this game. Passing our Stockfish accuracy would push it
@@ -129,6 +132,11 @@ function AccuracyPanel({
         </span>
       </div>
 
+      <div className="figure marks-figure">
+        <span className="figure-label">Your moves</span>
+        <Marks marks={marks} />
+      </div>
+
       {playedLike && (
         <div className="figure">
           <span className="figure-label">Played like</span>
@@ -145,6 +153,42 @@ function AccuracyPanel({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The six grades for this game.
+ *
+ * Grades the player never earned are dimmed rather than dropped, so the marks
+ * hold the same six positions on every game and the eye learns where to look
+ * for blunders instead of re-reading the row each time.
+ */
+function Marks({ marks }: { marks: MoveMarks }) {
+  const grades = [
+    { key: "best", symbol: "★", label: "best" },
+    { key: "excellent", symbol: "!", label: "excellent" },
+    { key: "good", symbol: "·", label: "good" },
+    { key: "inaccuracy", symbol: "?!", label: "inaccuracy" },
+    { key: "mistake", symbol: "?", label: "mistake" },
+    { key: "blunder", symbol: "??", label: "blunder" },
+  ] as const;
+
+  return (
+    <span className="marks">
+      {grades.map(({ key, symbol, label }) => {
+        const count = marks[key];
+        return (
+          <span
+            key={key}
+            className={`mark ${key}${count === 0 ? " none" : ""}`}
+            title={`${count} ${label}${count === 1 ? "" : "s"}`}
+          >
+            <span className="mark-symbol">{symbol}</span>
+            {count}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

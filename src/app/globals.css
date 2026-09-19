@@ -1316,11 +1316,11 @@ button.move-slot:hover {
 /* ----------------------------------------------------------- move marks */
 
 /*
- * The six grades for one game, in the games list.
+ * The six grades for one game, in the accuracy panel.
  *
- * Tabular figures and a fixed min-width keep the six groups in the same place
- * on every row, so a column of blunders can be scanned down the page without
- * reading a single label.
+ * Tabular figures keep the six groups from shifting as their counts change
+ * width, so the eye can find the blunder count in the same place on every
+ * game without reading a single label.
  */
 .marks {
   display: inline-flex;
@@ -1328,6 +1328,31 @@ button.move-slot:hover {
   font-variant-numeric: tabular-nums;
   font-size: 0.8rem;
   white-space: nowrap;
+}
+
+/*
+ * In the accuracy panel the marks stand in for a figure-value, so they take
+ * that size rather than the smaller one used in a dense table row. Allowed to
+ * wrap because the panel narrows on a small screen, where six groups on one
+ * line would push the panel wider than the viewport.
+ */
+.marks-figure .marks {
+  font-size: 1rem;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.15rem;
+}
+
+/*
+ * The panel is an even flex row, which gave the six marks the same width as a
+ * single percentage and wrapped them four-then-two. Sized to its content
+ * instead: enough for six groups on one line, and no more — `flex: 2` fixed
+ * the wrap but then squeezed the neighbours until "for comparison only" broke
+ * across three lines.
+ */
+.marks-figure {
+  flex: 0 1 auto;
+  min-width: max-content;
 }
 
 .mark {
@@ -1366,7 +1391,7 @@ button.move-slot:hover {
 /*
  * Mistake reads amber and blunder red, following the evaluation graph rather
  * than `.tag`, which paints both with `--danger`. Telling the two apart is the
- * reason this column shows six grades instead of three.
+ * reason this shows six grades instead of three.
  */
 .mark.inaccuracy {
   color: #d9a441;
