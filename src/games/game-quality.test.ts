@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { qualityScore, qualityPercentile, describeQuality } from "./game-quality";
+import {
+  qualityScore,
+  qualityPercentile,
+  describeQuality,
+  MIN_SCORED_MOVES,
+} from "./game-quality";
 import { emptyMarks, type MoveMarks } from "./move-marks";
 
 /**
@@ -88,5 +93,43 @@ describe("describing the result", () => {
 
   it("says nothing at all when there is no score", () => {
     expect(describeQuality(undefined)).toBeUndefined();
+  });
+});
+
+/**
+ * A game too short to judge.
+ *
+ * The score is a rate, so its denominator is the number of classified moves.
+ * Four analysed games in this project's corpus have fewer than five, and the
+ * shortest has three: there, a single blunder moves the score by 0.33, which
+ * spans most of the reference distribution between its 5th and 95th
+ * percentile. A percentile computed from three moves would look exactly as
+ * confident as one computed from sixty.
+ *
+ * The reference corpus itself was built from real rated games, whose own
+ * lengths start around thirty moves, so a three-move game is not something
+ * the distribution can place at all.
+ */
+describe("a game with too few moves to judge", () => {
+  it("has no score for a game of only a handful of moves", () => {
+    expect(qualityScore(marks({ best: 2, blunder: 1 }))).toBeUndefined();
+  });
+
+  it("scores a game once it is long enough to mean something", () => {
+    expect(qualityScore(marks({ best: 8, good: 4, blunder: 1 }))).toBeDefined();
+  });
+
+  it("draws the line where one move stops dominating the rate", () => {
+    // At the threshold a single move is worth 1/N of the score; below it the
+    // score says more about one move than about the game.
+    const atThreshold = qualityScore(
+      marks({ best: MIN_SCORED_MOVES - 1, blunder: 1 }),
+    );
+    const belowThreshold = qualityScore(
+      marks({ best: MIN_SCORED_MOVES - 2, blunder: 1 }),
+    );
+
+    expect(atThreshold).toBeDefined();
+    expect(belowThreshold).toBeUndefined();
   });
 });

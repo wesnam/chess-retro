@@ -30,7 +30,8 @@ import type { MoveMarks } from "./move-marks";
  * differences are mostly noise.
  *
  * Undefined for a game with no classified moves, since a rate needs a
- * denominator and zero of six marks is an unanalysed game, not a bad one.
+ * denominator and zero of six marks is an unanalysed game, not a bad one —
+ * and undefined again for a game too short to judge, see `MIN_SCORED_MOVES`.
  */
 export function qualityScore(marks: MoveMarks): number | undefined {
   const total =
@@ -40,10 +41,27 @@ export function qualityScore(marks: MoveMarks): number | undefined {
     marks.inaccuracy +
     marks.mistake +
     marks.blunder;
-  if (total === 0) return undefined;
+  if (total < MIN_SCORED_MOVES) return undefined;
 
   return (marks.best - marks.blunder - marks.mistake) / total;
 }
+
+/**
+ * The fewest classified moves a game needs before its score means anything.
+ *
+ * The score is a rate, so one move is worth 1/N of it. Four games in this
+ * project's corpus have fewer than five classified moves and the shortest has
+ * three, where a single blunder moves the score by 0.33 — most of the
+ * distance between the reference distribution's 5th and 95th percentile. Such
+ * a game would render a percentile as confident-looking as one drawn from
+ * sixty moves.
+ *
+ * Ten is where a single move is worth a tenth of the rate rather than a third
+ * of it, and it excludes 17 of this project's 425 analysed games. The
+ * reference games are themselves real rated games, median around 28 moves, so
+ * the distribution has nothing to say about a game far below that.
+ */
+export const MIN_SCORED_MOVES = 10;
 
 /**
  * The score distribution of the reference corpus, every 5th percentile.
