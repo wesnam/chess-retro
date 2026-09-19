@@ -66,7 +66,20 @@ export type LiveSearchOptions = {
   signal: AbortSignal;
 };
 
-export const DEFAULT_DEPTH = 18;
+/**
+ * Search depth per position.
+ *
+ * Each extra ply roughly quadruples the cost: measured on real positions from
+ * this corpus, depth 12 takes 38ms, depth 15 176ms, depth 18 840ms and depth
+ * 20 1811ms. Whole-game analysis pays that per position, so a 160-ply game
+ * costs 6s at depth 12 and 134s at depth 18.
+ *
+ * 16 is the compromise. Classification keys on how much win probability a
+ * move threw away, and the moves that matter — the blunders and mistakes —
+ * are already clear well before depth 18; the extra plies mostly move a move
+ * between `best` and `excellent`, which changes a mark but rarely the verdict.
+ */
+export const DEFAULT_DEPTH = 16;
 
 export class EngineError extends Error {}
 
