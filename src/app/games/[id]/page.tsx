@@ -8,11 +8,10 @@ import { GameReview } from "./GameReview";
 import { positionForPly } from "@/games/position-move";
 import { tallyMarks, type MoveMarks } from "@/games/move-marks";
 import {
-  estimateRating,
-  fitPerformanceCurve,
-  splitEstimate,
-} from "@/weakness/performance-rating";
-import { referencePairs } from "@/weakness/performance-reference";
+  describeQuality,
+  qualityPercentile,
+  qualityScore,
+} from "@/games/game-quality";
 
 export const dynamic = "force-dynamic";
 
@@ -99,13 +98,10 @@ function AccuracyPanel({
   };
   marks: MoveMarks;
 }) {
-  // Calibrated on chess.com's accuracy figures, so it is fed chess.com's
-  // number for this game. Passing our Stockfish accuracy would push it
-  // through a curve built for a different formula — close, but not the same
-  // scale, and the difference lands silently in the estimate.
-  const playedLike = splitEstimate(
-    estimateRating(PERFORMANCE_CURVE, game.ccAccuracyUser ?? Number.NaN),
-  );
+  // Where this game sits among games that were actually measured. It is not
+  // a rating: see `game-quality.ts` for why one game cannot carry a player's
+  // strength, and what was measured to establish that.
+  const quality = qualityPercentile(qualityScore(marks));
 
   return (
     <div className="accuracy-panel">
@@ -137,21 +133,19 @@ function AccuracyPanel({
         <Marks marks={marks} />
       </div>
 
-      {playedLike && (
-        <div className="figure">
-          <span className="figure-label">Played like</span>
-          {/*
-            Centre and range are separated so the value can be read at the
-            panel's size without wrapping mid-parenthesis — but the range sits
-            directly under it, never omitted: the centre alone reads as a
-            rating this estimate cannot support.
-          */}
-          <span className="figure-value">{playedLike.centre}</span>
-          <span className="figure-note">
-            {playedLike.range} · from chess.com accuracy
-          </span>
-        </div>
-      )}
+      <div className="figure">
+        <span className="figure-label">Game quality</span>
+        {/*
+          Shown for every analysed game, unlike the estimate it replaced,
+          which needed a chess.com review and so was blank on three quarters
+          of them. An em dash when a game has no classified moves keeps the
+          panel at four figures rather than reflowing to three.
+        */}
+        <span className="figure-value">
+          {quality !== undefined ? `${ordinal(quality)}` : "—"}
+        </span>
+        <span className="figure-note">{describeQuality(quality) ?? ""}</span>
+      </div>
     </div>
   );
 }
@@ -192,11 +186,21 @@ function Marks({ marks }: { marks: MoveMarks }) {
   );
 }
 
-/**
- * Fitted once per process rather than per request: the reference table is
- * fixed at build time, so the curve never changes between games.
- */
-const PERFORMANCE_CURVE = fitPerformanceCurve(referencePairs());
+/** A percentile as an ordinal, so "64" reads as a rank rather than a score. */
+function ordinal(value: number): string {
+  const rest = value % 100;
+  if (rest >= 11 && rest <= 13) return `${value}th`;
+  switch (value % 10) {
+    case 1:
+      return `${value}st`;
+    case 2:
+      return `${value}nd`;
+    case 3:
+      return `${value}rd`;
+    default:
+      return `${value}th`;
+  }
+}
 
 /**
  * Which board position a `?ply=` link should open on.
