@@ -45,6 +45,7 @@ export function graphGeometry({
   width,
   height,
   lastPositionIndex,
+  orientation = "white",
 }: {
   points: ReviewGraphPoint[];
   width: number;
@@ -55,6 +56,14 @@ export function graphGeometry({
    * of compressing the timeline into something that misreads as faster play.
    */
   lastPositionIndex?: number;
+  /**
+   * Which side the reviewer played. They occupy the TOP half either way, to
+   * match the board — a graph that always put White on top made a Black
+   * player's won game look lost at a glance.
+   *
+   * Defaults to White, which is also the unflipped geometry.
+   */
+  orientation?: "white" | "black";
 }): GraphGeometry {
   const midline = round2(height / 2);
 
@@ -69,8 +78,15 @@ export function graphGeometry({
   const placed: GraphPoint[] = points.map((point) => ({
     ...point,
     x: round2((point.positionIndex / span) * width),
-    // 100% for White is the top of the box, 0% the bottom.
-    y: round2(height - (point.whiteWinPct / 100) * height),
+    // The reviewer's win percentage, so 100 is always the top of the box.
+    // Mirrored about equality rather than negated, so a drawn position stays
+    // exactly on the midline instead of drifting by a rounding step.
+    y: round2(
+      height -
+        ((orientation === "black" ? 100 - point.whiteWinPct : point.whiteWinPct) /
+          100) *
+          height,
+    ),
   }));
 
   const linePath = placed

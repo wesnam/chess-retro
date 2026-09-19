@@ -342,6 +342,7 @@ export function GameReview({
           points={review.graph}
           current={index}
           lastPositionIndex={review.lastPositionIndex}
+          orientation={review.orientation}
           onSelect={jumpTo}
         />
       )}

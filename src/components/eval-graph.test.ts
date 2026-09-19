@@ -299,3 +299,92 @@ describe("area path as a clip source", () => {
     expect(areaPath.match(/Z/g)).toHaveLength(1);
   });
 });
+
+/**
+ * Which half of the graph the reviewer occupies.
+ *
+ * The board flips to the side you played, and the graph contradicting it —
+ * always White on top — makes a lost game read as a won one at a glance. The
+ * reviewer is always the TOP half, so "the line went up" means "it went well
+ * for me" in every game.
+ *
+ * The tone still tracks the piece colour, so a Black player's winning region
+ * is slate on top: position says who is ahead, colour says which side that is.
+ */
+describe("orientation", () => {
+  it("puts the reviewer on top when they played White", () => {
+    const { points } = graphGeometry({
+      points: [point(90, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+      orientation: "white",
+    });
+
+    expect(points[0]!.y).toBeLessThan(HEIGHT / 2);
+  });
+
+  it("puts the reviewer on top when they played Black", () => {
+    // 10% for White is 90% for Black. The Black player is winning, so the
+    // point belongs ABOVE the midline on their board.
+    const { points } = graphGeometry({
+      points: [point(10, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+      orientation: "black",
+    });
+
+    expect(points[0]!.y).toBeLessThan(HEIGHT / 2);
+  });
+
+  it("puts the opponent below the midline when the reviewer played Black", () => {
+    const { points } = graphGeometry({
+      points: [point(90, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+      orientation: "black",
+    });
+
+    expect(points[0]!.y).toBeGreaterThan(HEIGHT / 2);
+  });
+
+  it("leaves a balanced position on the centre line either way", () => {
+    for (const orientation of ["white", "black"] as const) {
+      const { points, midline } = graphGeometry({
+        points: [point(50, 1)],
+        width: WIDTH,
+        height: HEIGHT,
+        orientation,
+      });
+      expect(points[0]!.y, orientation).toBe(midline);
+    }
+  });
+
+  it("defaults to White on top when no orientation is given", () => {
+    // The existing callers and every test above rely on this.
+    const { points } = graphGeometry({
+      points: [point(90, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+    });
+
+    expect(points[0]!.y).toBeLessThan(HEIGHT / 2);
+  });
+
+  it("mirrors exactly, so flipping twice returns the original", () => {
+    // Guards against a flip that clamps or shifts rather than reflecting.
+    const asWhite = graphGeometry({
+      points: [point(73.25, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+      orientation: "white",
+    });
+    const asBlack = graphGeometry({
+      points: [point(100 - 73.25, 1)],
+      width: WIDTH,
+      height: HEIGHT,
+      orientation: "black",
+    });
+
+    expect(asBlack.points[0]!.y).toBe(asWhite.points[0]!.y);
+  });
+});

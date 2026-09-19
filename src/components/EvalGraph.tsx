@@ -17,11 +17,14 @@ export function EvalGraph({
   points,
   current,
   lastPositionIndex,
+  orientation = "white",
   onSelect,
 }: {
   points: ReviewGraphPoint[];
   current: number;
   lastPositionIndex: number;
+  /** Which side the reviewer played; they occupy the top half either way. */
+  orientation?: "white" | "black";
   onSelect: (positionIndex: number) => void;
 }) {
   // Clip paths are referenced by id, which is document-global. Two graphs on
@@ -35,8 +38,9 @@ export function EvalGraph({
         width: WIDTH,
         height: HEIGHT,
         lastPositionIndex,
+        orientation,
       }),
-    [points, lastPositionIndex],
+    [points, lastPositionIndex, orientation],
   );
 
   if (geometry.points.length === 0) return null;
@@ -73,14 +77,18 @@ export function EvalGraph({
         </defs>
 
         <rect x={0} y={0} width={WIDTH} height={HEIGHT} className="graph-ground" />
+        {/*
+          The top half is the reviewer's, so its tone follows the colour they
+          played rather than being fixed to White.
+        */}
         <path
           d={geometry.areaPath}
-          className="graph-area white"
+          className={`graph-area ${orientation === "black" ? "black" : "white"}`}
           clipPath={`url(#${id}-above)`}
         />
         <path
           d={geometry.areaPath}
-          className="graph-area black"
+          className={`graph-area ${orientation === "black" ? "white" : "black"}`}
           clipPath={`url(#${id}-below)`}
         />
         <line
@@ -114,10 +122,10 @@ export function EvalGraph({
           board cannot know which tone is which side.
         */}
         <text x={6} y={12} className="graph-axis-label">
-          White
+          {orientation === "black" ? "Black" : "White"}
         </text>
         <text x={6} y={HEIGHT - 5} className="graph-axis-label">
-          Black
+          {orientation === "black" ? "White" : "Black"}
         </text>
 
         {currentPoint && (
