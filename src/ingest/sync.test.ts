@@ -380,6 +380,57 @@ describe("corpus limit", () => {
     expect(second.stored).toBe(1);
   });
 
+  it("still picks up a recent game in the previous month right after a month boundary", async () => {
+    // First sync runs while March is still the current month, and fully
+    // fetches it (2 of 2 games), so it is legitimately marked complete. The
+    // second sync runs just after midnight on April 1st: chess.com's April
+    // archive exists but is still empty, and a game played late on March
+    // 31st — after the first sync — is filed under March.
+    const all = gamesOf("hikaru");
+    const served: Record<string, unknown[]> = {
+      "2024-03": all.slice(0, 2),
+      "2024-04": [],
+    };
+
+    const fetcher: Fetcher = async (input) => {
+      const url = String(input);
+      const body = url.endsWith("/archives")
+        ? {
+            archives: [
+              "https://api.chess.com/pub/player/x/games/2024/03",
+              "https://api.chess.com/pub/player/x/games/2024/04",
+            ],
+          }
+        : { games: served[monthOf(url)] ?? [] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    };
+
+    const corpusLimit = 2;
+    await syncGames(db, {
+      username: "hikaru",
+      corpusLimit,
+      fetcher,
+      now: new Date("2024-03-20T12:00:00Z"),
+    });
+    expect(countFor("hikaru")).toBe(2);
+
+    // A game played after the last sync, still in March by chess.com's clock.
+    served["2024-03"] = [
+      { ...all[0], uuid: "played-after-boundary", end_time: 1_800_000_000 },
+      ...served["2024-03"],
+    ];
+    const second = await syncGames(db, {
+      username: "hikaru",
+      corpusLimit,
+      fetcher,
+      now: new Date("2024-04-01T00:30:00Z"),
+    });
+
+    expect(second.monthsFetched).toContain("2024-03");
+    expect(second.stored).toBe(1);
+    expect(countFor("hikaru")).toBe(3);
+  });
+
   it("backfills further when the limit is raised", async () => {
     const older = gamesOf("hikaru").map((g, i) => ({
       ...g,

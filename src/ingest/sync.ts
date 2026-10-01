@@ -75,11 +75,14 @@ export async function syncGames(db: Db, options: SyncOptions): Promise<SyncResul
   );
 
   for (const [index, month] of pending.entries()) {
-    // The current month is always re-checked: it is still accumulating games,
-    // and a game played today must be picked up even when the corpus is
-    // already at its limit.
-    if (held >= corpusLimit && month !== thisMonth) break;
-
+    // No break on the corpus limit here: every month in `pending` is either
+    // the current month (always re-checked, since it is still accumulating
+    // games) or a past month not yet marked complete. A past month earns that
+    // by being cut short by the limit on an earlier sync — stopping here again
+    // would just re-produce the same incomplete month forever. It would also
+    // wrongly skip a past month at a fresh month boundary, when the newest
+    // archive can still be empty while unsynced games sit in what is now the
+    // previous month.
     const rawGames = await fetchArchive(username, month, fetcher);
     const mapped: MappedGame[] = [];
     for (const raw of rawGames) {
@@ -202,13 +205,27 @@ function newestEndTime(db: Db, username: string): number {
   return row?.newest ?? 0;
 }
 
+/**
+ * A month recorded complete while it was still the current month is not
+ * trustworthy once the calendar rolls over: chess.com can still append games
+ * to it for as long as it remains the current UTC month, after the sync that
+ * marked it complete already ran. Such a verdict is only honoured once it has
+ * been reconfirmed from a later month, i.e. `fetchedAt` falls on or after the
+ * first moment of the month after `month`.
+ */
 function isMonthComplete(db: Db, username: string, month: ArchiveMonth): boolean {
   const row = db
-    .select({ complete: syncState.complete })
+    .select({ complete: syncState.complete, fetchedAt: syncState.fetchedAt })
     .from(syncState)
     .where(and(eq(syncState.user, username), eq(syncState.archiveMonth, month)))
     .get();
-  return row?.complete === true;
+  if (row?.complete !== true) return false;
+  return row.fetchedAt >= startOfMonthAfter(month);
+}
+
+function startOfMonthAfter(month: ArchiveMonth): number {
+  const [year, m] = month.split("-").map(Number);
+  return Date.UTC(year, m, 1);
 }
 
 /**
